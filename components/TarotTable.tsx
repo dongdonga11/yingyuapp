@@ -18,20 +18,18 @@ const TarotTable: React.FC<TarotTableProps> = ({ onDraw }) => {
     const touchStartX = useRef<number | null>(null);
     const containerRef = useRef<HTMLDivElement>(null);
 
-    // Initialize deck - Create a "Full" feeling deck
+    // Initialize deck - We need a substantial deck to form the "piles"
     useEffect(() => {
-        // Triple the deck to ensure we have a nice thick pile
-        const fullDeck = [...TAROT_DECK, ...TAROT_DECK, ...TAROT_DECK];
-        // Shuffle it
+        // 4x Deck to create a really thick pile feel (approx 80 cards)
+        const fullDeck = [...TAROT_DECK, ...TAROT_DECK, ...TAROT_DECK, ...TAROT_DECK];
         setDeck(fullDeck.sort(() => Math.random() - 0.5));
-        // Start near the beginning (index 2) so we see a pile on the right
-        setActiveIndex(2);
+        // Start a bit in so we have a small left pile and huge right pile
+        setActiveIndex(5);
     }, []);
 
     // --- PHASE 1: SHUFFLE ---
     const handleShuffle = () => {
         setIsShuffling(true);
-        // Reduced delay from 1500ms to 600ms for snappier feel
         setTimeout(() => {
             setIsShuffling(false);
             setPhase('spread');
@@ -40,18 +38,17 @@ const TarotTable: React.FC<TarotTableProps> = ({ onDraw }) => {
 
     // --- INTERACTION HANDLERS ---
     
-    // 1. Wheel / Scroll Support
     const handleWheel = (e: React.WheelEvent) => {
         if (phase !== 'spread') return;
-        // Debounce slightly or just move based on direction
-        if (Math.abs(e.deltaX) > 10 || Math.abs(e.deltaY) > 10) {
-            const direction = e.deltaX > 0 || e.deltaY > 0 ? 1 : -1;
+        const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+        
+        if (Math.abs(delta) > 5) {
+            const direction = delta > 0 ? 1 : -1;
             const newIndex = Math.min(Math.max(0, activeIndex + direction), deck.length - 1);
             setActiveIndex(newIndex);
         }
     };
 
-    // 2. Touch Swipe Support
     const handleTouchStart = (e: React.TouchEvent) => {
         touchStartX.current = e.touches[0].clientX;
     };
@@ -62,12 +59,11 @@ const TarotTable: React.FC<TarotTableProps> = ({ onDraw }) => {
         const currentX = e.touches[0].clientX;
         const diff = touchStartX.current - currentX;
 
-        // Sensitivity threshold
-        if (Math.abs(diff) > 30) {
-            const direction = diff > 0 ? 1 : -1; // Drag left = Next card
+        if (Math.abs(diff) > 20) {
+            const direction = diff > 0 ? 1 : -1;
             const newIndex = Math.min(Math.max(0, activeIndex + direction), deck.length - 1);
             setActiveIndex(newIndex);
-            touchStartX.current = currentX; // Reset to allow continuous scrolling
+            touchStartX.current = currentX; 
         }
     };
 
@@ -75,7 +71,6 @@ const TarotTable: React.FC<TarotTableProps> = ({ onDraw }) => {
         touchStartX.current = null;
     };
 
-    // 3. Click to Select
     const handleCardClick = (index: number) => {
         if (index === activeIndex) {
             setPhase('reveal');
@@ -88,10 +83,10 @@ const TarotTable: React.FC<TarotTableProps> = ({ onDraw }) => {
         onDraw(deck[activeIndex]);
     };
 
-    // --- FAN CALCULATIONS (The "Compact Fan" Logic) ---
+    // --- THE HAND FAN LOGIC ---
     const getCardStyle = (index: number) => {
+        // SHUFFLE ANIMATION
         if (phase === 'shuffle') {
-            // Tighter jitter for the "deck in hand" feel
             const randomRot = Math.random() * 6 - 3;
             const randomX = Math.random() * 4 - 2;
             const randomY = Math.random() * 4 - 2;
@@ -99,77 +94,109 @@ const TarotTable: React.FC<TarotTableProps> = ({ onDraw }) => {
                 transform: `translate(${randomX}px, ${randomY}px) rotate(${randomRot}deg)`,
                 opacity: 1,
                 zIndex: index,
-                transition: 'transform 0.1s'
+                transition: 'transform 0.1s',
+                transformOrigin: 'center center'
             };
         }
 
+        // SPREAD (FAN) ANIMATION
         if (phase === 'spread') {
             const offset = index - activeIndex;
-            
-            // --- COMPACT FAN LOGIC ---
-            // We want cards near the center to be distinct, but cards far away to pile up.
-            
-            // X Position:
-            // Use a logarithmic-like scale. 
-            // Center cards are ~30px apart.
-            // Edge cards squeeze to ~5px apart.
-            const direction = offset > 0 ? 1 : -1;
             const absOffset = Math.abs(offset);
             
-            // How much X space each card takes. 
-            // First 3 cards get 35px, subsequent cards get rapidly less.
-            let xTranslate = 0;
-            if (absOffset <= 3) {
-                xTranslate = offset * 35; 
-            } else {
-                // Base for first 3
-                xTranslate = 3 * 35 * direction;
-                // Add condensed space for the rest
-                xTranslate += (absOffset - 3) * 10 * direction;
+            // CONFIGURATION
+            const VISIBLE_RADIUS = 6; 
+            const MAX_ROTATION = 75; // Even steeper pile angle
+            
+            // Transition
+            const transition = 'all 0.4s cubic-bezier(0.16, 1, 0.3, 1)'; // Snappy spring
+
+            // FIXED Z-INDEX: Follows natural deck order
+            const zIndex = index;
+
+            // 1. RIGHT STACK (The remaining deck)
+            if (offset > VISIBLE_RADIUS) {
+                const stackDepth = offset - VISIBLE_RADIUS; 
+                const visualStackOffset = Math.min(stackDepth, 8); 
+                return {
+                    transform: `
+                        translateX(${140 + (visualStackOffset * 1.5)}px) 
+                        translateY(${120 + (visualStackOffset * 0.5)}px) 
+                        rotate(${MAX_ROTATION}deg)
+                    `,
+                    zIndex, 
+                    opacity: 1,
+                    transition,
+                    transformOrigin: '50% 120%' 
+                };
             }
 
-            // Y Position (The Arch):
-            // Center is high (0), edges drop down.
-            // y = x^2 curve
-            const yTranslate = Math.pow(absOffset, 1.8) * 2 + (absOffset > 0 ? 20 : 0);
+            // 2. LEFT STACK (The discarded pile)
+            if (offset < -VISIBLE_RADIUS) {
+                const stackDepth = Math.abs(offset) - VISIBLE_RADIUS;
+                const visualStackOffset = Math.min(stackDepth, 8);
+                return {
+                    transform: `
+                        translateX(${-140 - (visualStackOffset * 1.5)}px) 
+                        translateY(${120 + (visualStackOffset * 0.5)}px) 
+                        rotate(${-MAX_ROTATION}deg)
+                    `,
+                    zIndex, 
+                    opacity: 1,
+                    transition,
+                    transformOrigin: '50% 120%'
+                };
+            }
 
-            // Rotation:
-            // Fan out like a hand.
-            const rotate = offset * 3; // 3 degrees per card
-
-            // Scale & Z-Index
-            const scale = index === activeIndex ? 1.1 : Math.max(0.8, 1 - (absOffset * 0.05));
-            const z = 100 - absOffset;
+            // 3. THE ACTIVE FAN
+            // Non-linear rotation
+            const sign = offset > 0 ? 1 : -1;
+            const rotate = sign * Math.pow(absOffset, 1.2) * 6; 
             
-            // Opacity
-            // Fade out the very far edges to keep focus
-            const opacity = 1 - (Math.max(0, absOffset - 15) * 0.2);
+            // Tighter X spacing
+            const xTranslate = offset * 18; 
+            
+            // Y & Scale Logic
+            let yTranslate = 0;
+            let scale = 0.95;
+
+            if (index === activeIndex) {
+                // "往上顶一下" - Push up significantly
+                yTranslate = -70; 
+                // "这个角更大一些" - Scale up the active card
+                scale = 1.15;
+            } else {
+                // Neighbors sink down
+                yTranslate = 20; 
+            }
 
             return {
                 transform: `translateX(${xTranslate}px) translateY(${yTranslate}px) rotate(${rotate}deg) scale(${scale})`,
-                zIndex: z,
-                opacity: Math.max(0, opacity),
-                // Smooth spring-like transition for sliding
-                transition: 'all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1)'
+                zIndex, // Fixed Z-Index here as well
+                opacity: 1,
+                transition,
+                transformOrigin: '50% 120%' 
             };
         }
         
-        // Reveal Phase
+        // REVEAL ANIMATION
         if (phase === 'reveal') {
             if (index === activeIndex) {
                  return {
-                    transform: `translate(0, -40px) scale(1.15) rotateY(180deg)`,
-                    zIndex: 200,
+                    transform: `translate(0, -100px) scale(1.2) rotateY(180deg)`,
+                    zIndex: 3000, // Still needs to be on top during the flip reveal
                     opacity: 1,
-                    transition: 'all 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
+                    transition: 'all 0.8s cubic-bezier(0.34, 1.56, 0.64, 1)',
+                    transformOrigin: 'center center' // Reset pivot for flip
                 };
             } else {
-                // Scatter effect
+                // Others scatter away
                 const scatterDir = index < activeIndex ? -1 : 1;
                  return {
-                    transform: `translate(${ scatterDir * 400 }px, 400px) rotate(${ scatterDir * 45 }deg)`,
+                    transform: `translate(${ scatterDir * 500 }px, 500px) rotate(${ scatterDir * 90 }deg)`,
                     opacity: 0,
-                    transition: 'all 0.6s ease-in'
+                    transition: 'all 0.5s ease-in',
+                    transformOrigin: 'center center'
                 };
             }
         }
@@ -212,21 +239,22 @@ const TarotTable: React.FC<TarotTableProps> = ({ onDraw }) => {
             {/* --- PHASE 2: SPREAD HEADER --- */}
             {phase === 'spread' && (
                 <div className="absolute top-16 text-center z-10 animate-fade-in pointer-events-none">
-                    <h2 className="text-gold font-mystic text-xl tracking-widest mb-1 text-glow">Choose Your Fate</h2>
-                    <p className="text-white/30 font-serif text-xs italic">Scroll or Swipe to reveal</p>
+                    <h2 className="text-gold font-mystic text-xl tracking-widest mb-1 text-glow">Destiny Awaits</h2>
+                    <p className="text-white/30 font-serif text-xs italic">
+                        {deck.length - activeIndex} cards remaining
+                    </p>
                 </div>
             )}
 
-            {/* --- CARD CONTAINER (THE FAN) --- */}
-            {/* Container shifted down to allow fan arch */}
-            <div className="relative w-full h-[600px] flex items-center justify-center perspective-1000 translate-y-20">
+            {/* --- CARD CONTAINER --- */}
+            <div className="relative w-full h-[600px] flex items-center justify-center perspective-1000 translate-y-28">
                 {deck.map((card, i) => (
                     <div
                         key={i}
                         onClick={() => phase === 'spread' && handleCardClick(i)}
                         style={getCardStyle(i)}
                         className={`
-                            absolute w-44 h-80 rounded-lg border border-gold/40 shadow-2xl cursor-pointer preserve-3d
+                            absolute w-44 h-80 rounded-lg border border-gold/40 shadow-[-5px_0_10px_rgba(0,0,0,0.5)] cursor-pointer preserve-3d
                             will-change-transform
                             ${isShuffling ? 'animate-[shake_0.2s_infinite]' : ''}
                         `}
@@ -235,33 +263,34 @@ const TarotTable: React.FC<TarotTableProps> = ({ onDraw }) => {
                         <div className="absolute inset-0 backface-hidden bg-obsidian rounded-lg border border-gold/60 flex items-center justify-center overflow-hidden">
                              {/* Elaborate Back Pattern */}
                             <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(197,160,89,0.15)_1.5px,transparent_1.5px)] bg-[size:10px_10px] opacity-40"></div>
-                            <div className="absolute inset-0 bg-[linear-gradient(45deg,rgba(0,0,0,0.4)_25%,transparent_25%,transparent_50%,rgba(0,0,0,0.4)_50%,rgba(0,0,0,0.4)_75%,transparent_75%,transparent)] bg-[size:20px_20px] opacity-20"></div>
                             
                             {/* Inner Frame */}
-                            <div className="absolute inset-3 border border-gold/30 rounded opacity-60"></div>
+                            <div className="absolute inset-2 border border-gold/30 rounded opacity-60"></div>
+                            <div className="absolute inset-4 border border-gold/10 rounded opacity-40"></div>
                             
                             {/* Mystic Symbol on Back */}
-                            <div className="w-24 h-24 border border-gold/40 rounded-full flex items-center justify-center relative">
-                                <div className="absolute w-16 h-16 border border-gold/30 rotate-45"></div>
-                                <div className="text-2xl opacity-40">👁️</div>
+                            <div className="w-20 h-20 border border-gold/40 rounded-full flex items-center justify-center relative rotate-45">
+                                <div className="absolute w-14 h-14 border border-gold/30"></div>
+                                <div className="text-xl opacity-30 -rotate-45">✦</div>
                             </div>
                         </div>
 
-                        {/* CARD FRONT (Only visible in Reveal phase due to rotateY) */}
+                        {/* CARD FRONT */}
                         <div 
                             className="absolute inset-0 backface-hidden rotate-y-180 bg-midnight rounded-lg border flex flex-col items-center justify-center text-center p-4 shadow-[0_0_50px_rgba(0,0,0,1)]"
                             style={{ borderColor: card.theme_color }}
                         >
                             <div className="flex-1 flex flex-col justify-center w-full relative">
-                                <div className="absolute top-0 left-0 text-xs opacity-50 font-mystic" style={{ color: card.theme_color }}>
+                                <div className="absolute top-2 left-2 text-xs opacity-50 font-mystic" style={{ color: card.theme_color }}>
                                     {['0', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'][i % 11] || '∞'}
                                 </div>
+                                <div className="absolute top-2 right-2 text-xs opacity-30">✦</div>
                                 
-                                <div className="text-7xl mb-8 animate-float filter drop-shadow-[0_0_15px_rgba(255,255,255,0.3)]">{card.icon}</div>
+                                <div className="text-7xl mb-6 animate-float filter drop-shadow-[0_0_10px_rgba(255,255,255,0.2)]">{card.icon}</div>
                                 
-                                <h3 className="font-mystic text-2xl text-white uppercase tracking-widest mb-2 scale-y-110">{card.name}</h3>
-                                <div className="w-8 h-[1px] bg-white/20 mx-auto my-3"></div>
-                                <div className="text-sm font-serif italic opacity-80" style={{ color: card.theme_color }}>{card.name_cn}</div>
+                                <h3 className="font-mystic text-xl text-white uppercase tracking-widest mb-2">{card.name}</h3>
+                                <div className="w-6 h-[1px] bg-white/20 mx-auto my-2"></div>
+                                <div className="text-xs font-serif italic opacity-70" style={{ color: card.theme_color }}>{card.name_cn}</div>
                             </div>
                         </div>
                     </div>
@@ -270,7 +299,7 @@ const TarotTable: React.FC<TarotTableProps> = ({ onDraw }) => {
 
             {/* --- PHASE 3: REVEAL DETAILS --- */}
             {phase === 'reveal' && activeCard && (
-                <div className="absolute bottom-0 left-0 right-0 p-8 bg-gradient-to-t from-midnight via-midnight/95 to-transparent z-40 flex flex-col items-center animate-slide-up pb-12">
+                <div className="absolute bottom-0 left-0 right-0 p-8 bg-gradient-to-t from-midnight via-midnight/98 to-transparent z-40 flex flex-col items-center animate-slide-up pb-12">
                     
                     {/* Fortune Text */}
                     <div className="text-center mb-8 max-w-xs">
