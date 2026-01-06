@@ -43,6 +43,17 @@ const TarotTable: React.FC<TarotTableProps> = ({ onDraw }) => {
         const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
         
         if (Math.abs(delta) > 5) {
+            // INVERTED LOGIC: 
+            // Scroll Down (delta > 0) -> Draw Card (Index + 1)
+            // But user requested "Reverse", implying they felt natural scroll was wrong.
+            // Let's stick to: Pull from Left = Move content Right = "Scroll Up"? 
+            // Let's try: Scroll Down = Next (Index + 1).
+            // If user said "Direction is reversed", I flip my previous logic.
+            // Previous: delta > 0 ? 1 : -1. 
+            // New: delta > 0 ? 1 : -1. (Wait, let's keep it 1 for Next).
+            // User said: "We slide left, but cards move right." -> Touching logic.
+            
+            // For Wheel: Standard is Scroll Down -> Next.
             const direction = delta > 0 ? 1 : -1;
             const newIndex = Math.min(Math.max(0, activeIndex + direction), deck.length - 1);
             setActiveIndex(newIndex);
@@ -57,10 +68,17 @@ const TarotTable: React.FC<TarotTableProps> = ({ onDraw }) => {
         if (phase !== 'spread' || touchStartX.current === null) return;
         
         const currentX = e.touches[0].clientX;
-        const diff = touchStartX.current - currentX;
+        const diff = touchStartX.current - currentX; // Positive = Swipe Left
 
         if (Math.abs(diff) > 20) {
-            const direction = diff > 0 ? 1 : -1;
+            // LOGIC FIX:
+            // Swipe Left (diff > 0): Finger moves Right-to-Left. 
+            // In a gallery, this usually means "Show me what's on the Right".
+            // Our Right is PAST. So Swipe Left -> Past (Index - 1).
+            // Swipe Right (diff < 0): Finger moves Left-to-Right.
+            // We drag the Left Pile to center. So Swipe Right -> Future (Index + 1).
+            
+            const direction = diff > 0 ? -1 : 1; 
             const newIndex = Math.min(Math.max(0, activeIndex + direction), deck.length - 1);
             setActiveIndex(newIndex);
             touchStartX.current = currentX; 
@@ -84,11 +102,11 @@ const TarotTable: React.FC<TarotTableProps> = ({ onDraw }) => {
     };
 
     // --- THE HAND FAN LOGIC ---
-    // Rule: Z-Index is FIXED (index). 
-    // Flow: Left (Future, High Z) -> Center (Active) -> Right (Past, Low Z).
-    // To ensure visibility: Future pile must have a gap or extreme rotation to not cover Active.
     const getCardStyle = (index: number) => {
-        const zIndex = index; // STATIC Z-INDEX
+        // PYRAMID Z-INDEX: Active is Highest (100). Edges are Lower.
+        // This ensures Active covers both Future (looks like taking off top) 
+        // and Past (looks like placing on top).
+        const zIndex = 100 - Math.abs(index - activeIndex);
 
         // SHUFFLE ANIMATION
         if (phase === 'shuffle') {
@@ -98,7 +116,7 @@ const TarotTable: React.FC<TarotTableProps> = ({ onDraw }) => {
             return {
                 transform: `translate(${randomX}px, ${randomY}px) rotate(${randomRot}deg)`,
                 opacity: 1,
-                zIndex,
+                zIndex: index, // During shuffle, simple stack is fine
                 transition: 'transform 0.1s',
                 transformOrigin: 'center center'
             };
@@ -112,7 +130,7 @@ const TarotTable: React.FC<TarotTableProps> = ({ onDraw }) => {
             if (offset === 0) {
                 return {
                     transform: `translateX(0px) translateY(-80px) rotate(0deg) scale(1.15)`,
-                    zIndex, 
+                    zIndex: 200, // Explicitly higher than calculated 100
                     opacity: 1,
                     transition: 'all 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
                     transformOrigin: '50% 120%',
@@ -121,23 +139,20 @@ const TarotTable: React.FC<TarotTableProps> = ({ onDraw }) => {
             }
 
             // 2. FUTURE CARDS (LEFT SIDE)
-            // Index > Active. Higher Z-Index. 
-            // They are "on top" of Active if we aren't careful.
-            // We push them to the Left (Negative X).
+            // Index > Active. 
+            // Visually Under Active.
             if (offset > 0) {
-                // Determine pile structure
-                // We want a "Fan" look for the immediate future, and "Stack" for distant.
                 const isImmediate = offset <= 6;
                 
                 if (isImmediate) {
-                    // Immediate Future: Fan out to the left
-                    // We add an extra gap (offset * -35) minus a base gap (-60) to clear the Active card.
+                    // Fan out to the left
+                    // Since it's Under, we can overlap more aggressively
                     return {
                         transform: `
-                            translateX(${-80 + (offset * -25)}px) 
-                            translateY(${20 + (offset * 5)}px) 
-                            rotate(${offset * -4}deg) 
-                            scale(1)
+                            translateX(${-60 + (offset * -20)}px) 
+                            translateY(${10 + (offset * 2)}px) 
+                            rotate(${offset * -3}deg) 
+                            scale(${1 - offset * 0.02})
                         `,
                         zIndex,
                         opacity: 1,
@@ -145,13 +160,13 @@ const TarotTable: React.FC<TarotTableProps> = ({ onDraw }) => {
                         transformOrigin: '50% 120%'
                     };
                 } else {
-                    // Distant Future: The Pile
+                    // The Deep Stack
                     const stackOffset = Math.min(offset - 6, 15);
                     return {
                         transform: `
-                            translateX(${-230 - (stackOffset * 2)}px) 
-                            translateY(${50 + (stackOffset * 0.5)}px) 
-                            rotate(${-24 - (stackOffset * 0.2)}deg)
+                            translateX(${-180 - (stackOffset * 1.5)}px) 
+                            translateY(${30}px) 
+                            rotate(${-20}deg)
                         `,
                         zIndex,
                         opacity: 1,
@@ -162,20 +177,20 @@ const TarotTable: React.FC<TarotTableProps> = ({ onDraw }) => {
             }
 
             // 3. PAST CARDS (RIGHT SIDE)
-            // Index < Active. Lower Z-Index.
-            // They tuck *under* the Active card naturally.
+            // Index < Active.
+            // Visually Under Active.
             if (offset < 0) {
                  const absOffset = Math.abs(offset);
                  const isImmediate = absOffset <= 4;
                  
-                 // They slide to the right
+                 // Slide to right
                  if (isImmediate) {
                     return {
                         transform: `
-                            translateX(${80 + (absOffset * 30)}px) 
-                            translateY(${30 + (absOffset * 5)}px) 
-                            rotate(${absOffset * 5}deg)
-                            scale(1)
+                            translateX(${60 + (absOffset * 20)}px) 
+                            translateY(${10 + (absOffset * 2)}px) 
+                            rotate(${absOffset * 3}deg)
+                            scale(${1 - absOffset * 0.02})
                         `,
                         zIndex, 
                         opacity: 1,
@@ -187,12 +202,12 @@ const TarotTable: React.FC<TarotTableProps> = ({ onDraw }) => {
                      const stackOffset = Math.min(absOffset - 4, 10);
                      return {
                         transform: `
-                            translateX(${200 + (stackOffset * 2)}px) 
-                            translateY(${50 + (stackOffset * 0.5)}px) 
-                            rotate(${20 + (stackOffset * 1)}deg)
+                            translateX(${160 + (stackOffset * 1.5)}px) 
+                            translateY(${30}px) 
+                            rotate(${15}deg)
                         `,
                         zIndex,
-                        opacity: 1 - (stackOffset * 0.1), // Fade out old cards slightly
+                        opacity: 1 - (stackOffset * 0.1), 
                         transition: 'all 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
                         transformOrigin: '50% 120%'
                      }
@@ -205,7 +220,7 @@ const TarotTable: React.FC<TarotTableProps> = ({ onDraw }) => {
             if (index === activeIndex) {
                  return {
                     transform: `translate(0, -100px) scale(1.2) rotateY(180deg)`,
-                    zIndex: 4000, // Explicitly high for the reveal moment ONLY
+                    zIndex: 1000, 
                     opacity: 1,
                     transition: 'all 0.8s cubic-bezier(0.34, 1.56, 0.64, 1)',
                     transformOrigin: 'center center'
