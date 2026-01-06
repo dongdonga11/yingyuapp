@@ -18,13 +18,13 @@ const TarotTable: React.FC<TarotTableProps> = ({ onDraw }) => {
     const touchStartX = useRef<number | null>(null);
     const containerRef = useRef<HTMLDivElement>(null);
 
-    // Initialize deck - We need a substantial deck to form the "piles"
+    // Initialize deck
     useEffect(() => {
-        // 4x Deck to create a really thick pile feel (approx 80 cards)
+        // 4x Deck to create a really thick pile feel
         const fullDeck = [...TAROT_DECK, ...TAROT_DECK, ...TAROT_DECK, ...TAROT_DECK];
         setDeck(fullDeck.sort(() => Math.random() - 0.5));
-        // Start a bit in so we have a small left pile and huge right pile
-        setActiveIndex(5);
+        // START AT 0: The deck is full on the left (Future)
+        setActiveIndex(0);
     }, []);
 
     // --- PHASE 1: SHUFFLE ---
@@ -84,7 +84,12 @@ const TarotTable: React.FC<TarotTableProps> = ({ onDraw }) => {
     };
 
     // --- THE HAND FAN LOGIC ---
+    // Rule: Z-Index is FIXED (index). 
+    // Flow: Left (Future, High Z) -> Center (Active) -> Right (Past, Low Z).
+    // To ensure visibility: Future pile must have a gap or extreme rotation to not cover Active.
     const getCardStyle = (index: number) => {
+        const zIndex = index; // STATIC Z-INDEX
+
         // SHUFFLE ANIMATION
         if (phase === 'shuffle') {
             const randomRot = Math.random() * 6 - 3;
@@ -93,90 +98,106 @@ const TarotTable: React.FC<TarotTableProps> = ({ onDraw }) => {
             return {
                 transform: `translate(${randomX}px, ${randomY}px) rotate(${randomRot}deg)`,
                 opacity: 1,
-                zIndex: index,
+                zIndex,
                 transition: 'transform 0.1s',
                 transformOrigin: 'center center'
             };
         }
 
-        // SPREAD (FAN) ANIMATION
+        // SPREAD ANIMATION
         if (phase === 'spread') {
-            const offset = index - activeIndex;
-            const absOffset = Math.abs(offset);
+            const offset = index - activeIndex; 
             
-            // CONFIGURATION
-            const VISIBLE_RADIUS = 6; 
-            const MAX_ROTATION = 75; // Even steeper pile angle
-            
-            // Transition
-            const transition = 'all 0.4s cubic-bezier(0.16, 1, 0.3, 1)'; // Snappy spring
-
-            // FIXED Z-INDEX: Follows natural deck order
-            const zIndex = index;
-
-            // 1. RIGHT STACK (The remaining deck)
-            if (offset > VISIBLE_RADIUS) {
-                const stackDepth = offset - VISIBLE_RADIUS; 
-                const visualStackOffset = Math.min(stackDepth, 8); 
+            // 1. ACTIVE CARD (CENTER)
+            if (offset === 0) {
                 return {
-                    transform: `
-                        translateX(${140 + (visualStackOffset * 1.5)}px) 
-                        translateY(${120 + (visualStackOffset * 0.5)}px) 
-                        rotate(${MAX_ROTATION}deg)
-                    `,
+                    transform: `translateX(0px) translateY(-80px) rotate(0deg) scale(1.15)`,
                     zIndex, 
                     opacity: 1,
-                    transition,
-                    transformOrigin: '50% 120%' 
+                    transition: 'all 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
+                    transformOrigin: '50% 120%',
+                    filter: 'brightness(1.1) drop-shadow(0 20px 20px rgba(0,0,0,0.5))'
                 };
             }
 
-            // 2. LEFT STACK (The discarded pile)
-            if (offset < -VISIBLE_RADIUS) {
-                const stackDepth = Math.abs(offset) - VISIBLE_RADIUS;
-                const visualStackOffset = Math.min(stackDepth, 8);
-                return {
-                    transform: `
-                        translateX(${-140 - (visualStackOffset * 1.5)}px) 
-                        translateY(${120 + (visualStackOffset * 0.5)}px) 
-                        rotate(${-MAX_ROTATION}deg)
-                    `,
-                    zIndex, 
-                    opacity: 1,
-                    transition,
-                    transformOrigin: '50% 120%'
-                };
+            // 2. FUTURE CARDS (LEFT SIDE)
+            // Index > Active. Higher Z-Index. 
+            // They are "on top" of Active if we aren't careful.
+            // We push them to the Left (Negative X).
+            if (offset > 0) {
+                // Determine pile structure
+                // We want a "Fan" look for the immediate future, and "Stack" for distant.
+                const isImmediate = offset <= 6;
+                
+                if (isImmediate) {
+                    // Immediate Future: Fan out to the left
+                    // We add an extra gap (offset * -35) minus a base gap (-60) to clear the Active card.
+                    return {
+                        transform: `
+                            translateX(${-80 + (offset * -25)}px) 
+                            translateY(${20 + (offset * 5)}px) 
+                            rotate(${offset * -4}deg) 
+                            scale(1)
+                        `,
+                        zIndex,
+                        opacity: 1,
+                        transition: 'all 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
+                        transformOrigin: '50% 120%'
+                    };
+                } else {
+                    // Distant Future: The Pile
+                    const stackOffset = Math.min(offset - 6, 15);
+                    return {
+                        transform: `
+                            translateX(${-230 - (stackOffset * 2)}px) 
+                            translateY(${50 + (stackOffset * 0.5)}px) 
+                            rotate(${-24 - (stackOffset * 0.2)}deg)
+                        `,
+                        zIndex,
+                        opacity: 1,
+                        transition: 'all 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
+                        transformOrigin: '50% 120%'
+                    };
+                }
             }
 
-            // 3. THE ACTIVE FAN
-            // Non-linear rotation
-            const sign = offset > 0 ? 1 : -1;
-            const rotate = sign * Math.pow(absOffset, 1.2) * 6; 
-            
-            // Tighter X spacing
-            const xTranslate = offset * 18; 
-            
-            // Y & Scale Logic
-            let yTranslate = 0;
-            let scale = 0.95;
-
-            if (index === activeIndex) {
-                // "往上顶一下" - Push up significantly
-                yTranslate = -70; 
-                // "这个角更大一些" - Scale up the active card
-                scale = 1.15;
-            } else {
-                // Neighbors sink down
-                yTranslate = 20; 
+            // 3. PAST CARDS (RIGHT SIDE)
+            // Index < Active. Lower Z-Index.
+            // They tuck *under* the Active card naturally.
+            if (offset < 0) {
+                 const absOffset = Math.abs(offset);
+                 const isImmediate = absOffset <= 4;
+                 
+                 // They slide to the right
+                 if (isImmediate) {
+                    return {
+                        transform: `
+                            translateX(${80 + (absOffset * 30)}px) 
+                            translateY(${30 + (absOffset * 5)}px) 
+                            rotate(${absOffset * 5}deg)
+                            scale(1)
+                        `,
+                        zIndex, 
+                        opacity: 1,
+                        transition: 'all 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
+                        transformOrigin: '50% 120%'
+                    };
+                 } else {
+                     // Discard Pile
+                     const stackOffset = Math.min(absOffset - 4, 10);
+                     return {
+                        transform: `
+                            translateX(${200 + (stackOffset * 2)}px) 
+                            translateY(${50 + (stackOffset * 0.5)}px) 
+                            rotate(${20 + (stackOffset * 1)}deg)
+                        `,
+                        zIndex,
+                        opacity: 1 - (stackOffset * 0.1), // Fade out old cards slightly
+                        transition: 'all 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
+                        transformOrigin: '50% 120%'
+                     }
+                 }
             }
-
-            return {
-                transform: `translateX(${xTranslate}px) translateY(${yTranslate}px) rotate(${rotate}deg) scale(${scale})`,
-                zIndex, // Fixed Z-Index here as well
-                opacity: 1,
-                transition,
-                transformOrigin: '50% 120%' 
-            };
         }
         
         // REVEAL ANIMATION
@@ -184,18 +205,16 @@ const TarotTable: React.FC<TarotTableProps> = ({ onDraw }) => {
             if (index === activeIndex) {
                  return {
                     transform: `translate(0, -100px) scale(1.2) rotateY(180deg)`,
-                    zIndex: 3000, // Still needs to be on top during the flip reveal
+                    zIndex: 4000, // Explicitly high for the reveal moment ONLY
                     opacity: 1,
                     transition: 'all 0.8s cubic-bezier(0.34, 1.56, 0.64, 1)',
-                    transformOrigin: 'center center' // Reset pivot for flip
+                    transformOrigin: 'center center'
                 };
             } else {
-                // Others scatter away
-                const scatterDir = index < activeIndex ? -1 : 1;
                  return {
-                    transform: `translate(${ scatterDir * 500 }px, 500px) rotate(${ scatterDir * 90 }deg)`,
+                    transform: `translate(${ (index - activeIndex) * 100 }px, 800px) rotate(${ (index - activeIndex) * 20 }deg)`,
                     opacity: 0,
-                    transition: 'all 0.5s ease-in',
+                    transition: 'all 0.6s ease-in',
                     transformOrigin: 'center center'
                 };
             }
