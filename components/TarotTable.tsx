@@ -18,13 +18,13 @@ const TarotTable: React.FC<TarotTableProps> = ({ onDraw }) => {
     const touchStartX = useRef<number | null>(null);
     const containerRef = useRef<HTMLDivElement>(null);
 
-    // Initialize deck
+    // Initialize deck - We need a substantial deck to form the "piles"
     useEffect(() => {
-        // 4x Deck to create a really thick pile feel
+        // 4x Deck to create a really thick pile feel (approx 80 cards)
         const fullDeck = [...TAROT_DECK, ...TAROT_DECK, ...TAROT_DECK, ...TAROT_DECK];
         setDeck(fullDeck.sort(() => Math.random() - 0.5));
-        // START AT 0: The deck is full on the left (Future)
-        setActiveIndex(0);
+        // Start a bit in so we have a small left pile and huge right pile
+        setActiveIndex(5);
     }, []);
 
     // --- PHASE 1: SHUFFLE ---
@@ -43,17 +43,6 @@ const TarotTable: React.FC<TarotTableProps> = ({ onDraw }) => {
         const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
         
         if (Math.abs(delta) > 5) {
-            // INVERTED LOGIC: 
-            // Scroll Down (delta > 0) -> Draw Card (Index + 1)
-            // But user requested "Reverse", implying they felt natural scroll was wrong.
-            // Let's stick to: Pull from Left = Move content Right = "Scroll Up"? 
-            // Let's try: Scroll Down = Next (Index + 1).
-            // If user said "Direction is reversed", I flip my previous logic.
-            // Previous: delta > 0 ? 1 : -1. 
-            // New: delta > 0 ? 1 : -1. (Wait, let's keep it 1 for Next).
-            // User said: "We slide left, but cards move right." -> Touching logic.
-            
-            // For Wheel: Standard is Scroll Down -> Next.
             const direction = delta > 0 ? 1 : -1;
             const newIndex = Math.min(Math.max(0, activeIndex + direction), deck.length - 1);
             setActiveIndex(newIndex);
@@ -68,17 +57,10 @@ const TarotTable: React.FC<TarotTableProps> = ({ onDraw }) => {
         if (phase !== 'spread' || touchStartX.current === null) return;
         
         const currentX = e.touches[0].clientX;
-        const diff = touchStartX.current - currentX; // Positive = Swipe Left
+        const diff = touchStartX.current - currentX;
 
         if (Math.abs(diff) > 20) {
-            // LOGIC FIX:
-            // Swipe Left (diff > 0): Finger moves Right-to-Left. 
-            // In a gallery, this usually means "Show me what's on the Right".
-            // Our Right is PAST. So Swipe Left -> Past (Index - 1).
-            // Swipe Right (diff < 0): Finger moves Left-to-Right.
-            // We drag the Left Pile to center. So Swipe Right -> Future (Index + 1).
-            
-            const direction = diff > 0 ? -1 : 1; 
+            const direction = diff > 0 ? 1 : -1;
             const newIndex = Math.min(Math.max(0, activeIndex + direction), deck.length - 1);
             setActiveIndex(newIndex);
             touchStartX.current = currentX; 
@@ -103,11 +85,6 @@ const TarotTable: React.FC<TarotTableProps> = ({ onDraw }) => {
 
     // --- THE HAND FAN LOGIC ---
     const getCardStyle = (index: number) => {
-        // PYRAMID Z-INDEX: Active is Highest (100). Edges are Lower.
-        // This ensures Active covers both Future (looks like taking off top) 
-        // and Past (looks like placing on top).
-        const zIndex = 100 - Math.abs(index - activeIndex);
-
         // SHUFFLE ANIMATION
         if (phase === 'shuffle') {
             const randomRot = Math.random() * 6 - 3;
@@ -116,103 +93,90 @@ const TarotTable: React.FC<TarotTableProps> = ({ onDraw }) => {
             return {
                 transform: `translate(${randomX}px, ${randomY}px) rotate(${randomRot}deg)`,
                 opacity: 1,
-                zIndex: index, // During shuffle, simple stack is fine
+                zIndex: index,
                 transition: 'transform 0.1s',
                 transformOrigin: 'center center'
             };
         }
 
-        // SPREAD ANIMATION
+        // SPREAD (FAN) ANIMATION
         if (phase === 'spread') {
-            const offset = index - activeIndex; 
+            const offset = index - activeIndex;
+            const absOffset = Math.abs(offset);
             
-            // 1. ACTIVE CARD (CENTER)
-            if (offset === 0) {
+            // CONFIGURATION
+            const VISIBLE_RADIUS = 6; 
+            const MAX_ROTATION = 75; // Even steeper pile angle
+            
+            // Transition
+            const transition = 'all 0.4s cubic-bezier(0.16, 1, 0.3, 1)'; // Snappy spring
+
+            // FIXED Z-INDEX: Follows natural deck order
+            const zIndex = index;
+
+            // 1. RIGHT STACK (The remaining deck)
+            if (offset > VISIBLE_RADIUS) {
+                const stackDepth = offset - VISIBLE_RADIUS; 
+                const visualStackOffset = Math.min(stackDepth, 8); 
                 return {
-                    transform: `translateX(0px) translateY(-80px) rotate(0deg) scale(1.15)`,
-                    zIndex: 200, // Explicitly higher than calculated 100
+                    transform: `
+                        translateX(${140 + (visualStackOffset * 1.5)}px) 
+                        translateY(${120 + (visualStackOffset * 0.5)}px) 
+                        rotate(${MAX_ROTATION}deg)
+                    `,
+                    zIndex, 
                     opacity: 1,
-                    transition: 'all 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
-                    transformOrigin: '50% 120%',
-                    filter: 'brightness(1.1) drop-shadow(0 20px 20px rgba(0,0,0,0.5))'
+                    transition,
+                    transformOrigin: '50% 120%' 
                 };
             }
 
-            // 2. FUTURE CARDS (LEFT SIDE)
-            // Index > Active. 
-            // Visually Under Active.
-            if (offset > 0) {
-                const isImmediate = offset <= 6;
-                
-                if (isImmediate) {
-                    // Fan out to the left
-                    // Since it's Under, we can overlap more aggressively
-                    return {
-                        transform: `
-                            translateX(${-60 + (offset * -20)}px) 
-                            translateY(${10 + (offset * 2)}px) 
-                            rotate(${offset * -3}deg) 
-                            scale(${1 - offset * 0.02})
-                        `,
-                        zIndex,
-                        opacity: 1,
-                        transition: 'all 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
-                        transformOrigin: '50% 120%'
-                    };
-                } else {
-                    // The Deep Stack
-                    const stackOffset = Math.min(offset - 6, 15);
-                    return {
-                        transform: `
-                            translateX(${-180 - (stackOffset * 1.5)}px) 
-                            translateY(${30}px) 
-                            rotate(${-20}deg)
-                        `,
-                        zIndex,
-                        opacity: 1,
-                        transition: 'all 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
-                        transformOrigin: '50% 120%'
-                    };
-                }
+            // 2. LEFT STACK (The discarded pile)
+            if (offset < -VISIBLE_RADIUS) {
+                const stackDepth = Math.abs(offset) - VISIBLE_RADIUS;
+                const visualStackOffset = Math.min(stackDepth, 8);
+                return {
+                    transform: `
+                        translateX(${-140 - (visualStackOffset * 1.5)}px) 
+                        translateY(${120 + (visualStackOffset * 0.5)}px) 
+                        rotate(${-MAX_ROTATION}deg)
+                    `,
+                    zIndex, 
+                    opacity: 1,
+                    transition,
+                    transformOrigin: '50% 120%'
+                };
             }
 
-            // 3. PAST CARDS (RIGHT SIDE)
-            // Index < Active.
-            // Visually Under Active.
-            if (offset < 0) {
-                 const absOffset = Math.abs(offset);
-                 const isImmediate = absOffset <= 4;
-                 
-                 // Slide to right
-                 if (isImmediate) {
-                    return {
-                        transform: `
-                            translateX(${60 + (absOffset * 20)}px) 
-                            translateY(${10 + (absOffset * 2)}px) 
-                            rotate(${absOffset * 3}deg)
-                            scale(${1 - absOffset * 0.02})
-                        `,
-                        zIndex, 
-                        opacity: 1,
-                        transition: 'all 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
-                        transformOrigin: '50% 120%'
-                    };
-                 } else {
-                     // Discard Pile
-                     const stackOffset = Math.min(absOffset - 4, 10);
-                     return {
-                        transform: `
-                            translateX(${160 + (stackOffset * 1.5)}px) 
-                            translateY(${30}px) 
-                            rotate(${15}deg)
-                        `,
-                        zIndex,
-                        opacity: 1 - (stackOffset * 0.1), 
-                        transition: 'all 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
-                        transformOrigin: '50% 120%'
-                     }
-                 }
+            // 3. THE ACTIVE FAN
+            // Non-linear rotation
+            const sign = offset > 0 ? 1 : -1;
+            const rotate = sign * Math.pow(absOffset, 1.2) * 6; 
+            
+            // Tighter X spacing
+            const xTranslate = offset * 18; 
+            
+            // Y & Scale Logic
+            let yTranslate = 0;
+            let scale = 0.95;
+
+            if (index === activeIndex) {
+                // "往上顶一下" - Push up significantly
+                yTranslate = -70; 
+                // "这个角更大一些" - Scale up the active card
+                scale = 1.15;
+            } else {
+                // Neighbors sink down
+                yTranslate = 20; 
             }
+
+            return {
+                transform: `translateX(${xTranslate}px) translateY(${yTranslate}px) rotate(${rotate}deg) scale(${scale})`,
+                zIndex, // Fixed Z-Index here as well
+                opacity: 1,
+                transition,
+                transformOrigin: '50% 120%' 
+            };
         }
         
         // REVEAL ANIMATION
@@ -220,16 +184,18 @@ const TarotTable: React.FC<TarotTableProps> = ({ onDraw }) => {
             if (index === activeIndex) {
                  return {
                     transform: `translate(0, -100px) scale(1.2) rotateY(180deg)`,
-                    zIndex: 1000, 
+                    zIndex: 3000, // Still needs to be on top during the flip reveal
                     opacity: 1,
                     transition: 'all 0.8s cubic-bezier(0.34, 1.56, 0.64, 1)',
-                    transformOrigin: 'center center'
+                    transformOrigin: 'center center' // Reset pivot for flip
                 };
             } else {
+                // Others scatter away
+                const scatterDir = index < activeIndex ? -1 : 1;
                  return {
-                    transform: `translate(${ (index - activeIndex) * 100 }px, 800px) rotate(${ (index - activeIndex) * 20 }deg)`,
+                    transform: `translate(${ scatterDir * 500 }px, 500px) rotate(${ scatterDir * 90 }deg)`,
                     opacity: 0,
-                    transition: 'all 0.6s ease-in',
+                    transition: 'all 0.5s ease-in',
                     transformOrigin: 'center center'
                 };
             }
