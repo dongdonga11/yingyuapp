@@ -74,15 +74,17 @@ const App: React.FC = () => {
   // --- TAB SWITCHING HANDLER ---
   const handleTabChange = (tab: MainTab) => {
       setActiveTab(tab);
-      // NOTE: We do not reset 'appState' here. 
-      // This allows the user to switch to 'Profile' to check stats, 
-      // then switch back to 'Oracle' and resume their card session exactly where they left off.
+      // If switching back to Oracle tab, check if we were in the middle of something.
+      // If not (e.g. initial load), default to oracle_start.
+      if (tab === 'oracle' && appState === 'library' && selectedBook) {
+          setAppState('oracle_start');
+      }
   };
 
   // Called when user selects a book from the Grimoire Tab (Library)
   const handleBookSelected = (book: Grimoire) => {
       setSelectedBook(book);
-      // Change: Move to Start Screen instead of directly to Altar
+      // Move to Start Screen
       setAppState('oracle_start'); 
       setActiveTab('oracle');
   };
@@ -525,8 +527,11 @@ const App: React.FC = () => {
       return <Bookshelf onBookSelected={handleBookSelected} />;
   }
 
-  // --- LOGIC: HIDE NAVBAR ON START SCREEN ---
-  const showNavBar = appState !== 'oracle_start' && appState !== 'library';
+  // --- LOGIC: HIDE NAVBAR WHEN RITUAL STARTS ---
+  // Visible in: Oracle Start Screen, Grimoire Tab, Profile Tab.
+  // Hidden in: Altar, Prophecy Reveal, Learning, Oracle Reading.
+  const isRitualActive = ['altar', 'prophecy_reveal', 'learning', 'oracle_ready', 'oracle_reading'].includes(appState);
+  const showNavBar = !isRitualActive;
 
   return (
     <Layout themeColor={appState === 'oracle_reading' ? '#9333EA' : currentActiveArcana?.theme_color}>

@@ -8,10 +8,9 @@ interface StartScreenProps {
 
 const StartScreen: React.FC<StartScreenProps> = ({ book, onStart }) => {
     return (
-        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center animate-fade-in overflow-hidden">
+        <div className="relative w-full h-full flex flex-col items-center justify-center animate-fade-in overflow-hidden pb-16">
             
             {/* --- BACKGROUND ATMOSPHERE --- */}
-            <div className="absolute inset-0 bg-midnight"></div>
             {/* Rotating Star Map / Magic Circle Background */}
             <div className="absolute inset-0 opacity-20 pointer-events-none">
                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] border border-gold/20 rounded-full animate-[spin_60s_linear_infinite]"></div>
@@ -59,9 +58,6 @@ const StartScreen: React.FC<StartScreenProps> = ({ book, onStart }) => {
                 </div>
 
             </div>
-            
-            {/* Bottom Mist */}
-            <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-midnight to-transparent pointer-events-none"></div>
         </div>
     );
 };

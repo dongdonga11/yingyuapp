@@ -39,11 +39,13 @@ const TarotTable: React.FC<TarotTableProps> = ({ onReadingComplete }) => {
 
     // --- PHASE 1: SHUFFLE ---
     const handleShuffle = () => {
+        if(isShuffling) return;
         setIsShuffling(true);
+        // Shake animation plays via CSS class based on isShuffling state
         setTimeout(() => {
             setIsShuffling(false);
             setPhase('spread');
-        }, 600); 
+        }, 800); 
     };
 
     // --- INTERACTION HANDLERS ---
@@ -101,55 +103,63 @@ const TarotTable: React.FC<TarotTableProps> = ({ onReadingComplete }) => {
 
     // --- SELECTION LOGIC ---
     const handleCardClick = (index: number) => {
-        if (phase !== 'spread') return;
-        if (flyingCard) return; // Prevent double clicks
-        
-        if (index === activeIndex) {
-            // 1. Start Flying Animation
-            if (selectedCards.length < 3) {
-                const targetSlotIndex = selectedCards.length;
-                setFlyingCard({ deckIndex: index, slotIndex: targetSlotIndex });
+        // CASE 1: Shuffle Phase - Click anywhere on deck to shuffle
+        if (phase === 'shuffle') {
+            handleShuffle();
+            return;
+        }
 
-                // 2. After animation, update state
-                setTimeout(() => {
-                    const card = deck[index];
-                    const newSelected = [...selectedCards, card];
-                    
-                    setSelectedCards(newSelected);
-                    setHiddenIndices(prev => new Set(prev).add(index));
-                    setFlyingCard(null);
+        // CASE 2: Spread Phase - Pick a card
+        if (phase === 'spread') {
+            if (flyingCard) return; // Prevent double clicks
+            
+            if (index === activeIndex) {
+                // 1. Start Flying Animation
+                if (selectedCards.length < 3) {
+                    const targetSlotIndex = selectedCards.length;
+                    setFlyingCard({ deckIndex: index, slotIndex: targetSlotIndex });
 
-                    // Find next available active index
-                    let nextIndex = index + 1;
-                    // Try to find nearest available neighbor
-                    if (nextIndex >= deck.length || hiddenIndices.has(nextIndex)) {
-                        // Look backwards if forwards is blocked or end of deck
-                        let backIndex = index - 1;
-                        while(backIndex >= 0 && hiddenIndices.has(backIndex)) backIndex--;
+                    // 2. After animation, update state
+                    setTimeout(() => {
+                        const card = deck[index];
+                        const newSelected = [...selectedCards, card];
                         
-                        if (backIndex >= 0) {
-                            nextIndex = backIndex;
-                        } else {
-                            // Look forwards again harder
-                            while(nextIndex < deck.length && hiddenIndices.has(nextIndex)) nextIndex++;
-                        }
-                    }
-                    
-                    if (nextIndex < deck.length && nextIndex >= 0) {
-                        setActiveIndex(nextIndex);
-                    }
+                        setSelectedCards(newSelected);
+                        setHiddenIndices(prev => new Set(prev).add(index));
+                        setFlyingCard(null);
 
-                    // Check completion
-                    if (newSelected.length === 3) {
-                        setPhase('completing');
-                        setTimeout(() => {
-                            onReadingComplete(newSelected);
-                        }, 800);
-                    }
-                }, 600); // Animation duration match
+                        // Find next available active index
+                        let nextIndex = index + 1;
+                        // Try to find nearest available neighbor
+                        if (nextIndex >= deck.length || hiddenIndices.has(nextIndex)) {
+                            // Look backwards if forwards is blocked or end of deck
+                            let backIndex = index - 1;
+                            while(backIndex >= 0 && hiddenIndices.has(backIndex)) backIndex--;
+                            
+                            if (backIndex >= 0) {
+                                nextIndex = backIndex;
+                            } else {
+                                // Look forwards again harder
+                                while(nextIndex < deck.length && hiddenIndices.has(nextIndex)) nextIndex++;
+                            }
+                        }
+                        
+                        if (nextIndex < deck.length && nextIndex >= 0) {
+                            setActiveIndex(nextIndex);
+                        }
+
+                        // Check completion
+                        if (newSelected.length === 3) {
+                            setPhase('completing');
+                            setTimeout(() => {
+                                onReadingComplete(newSelected);
+                            }, 800);
+                        }
+                    }, 600); // Animation duration match
+                }
+            } else {
+                setActiveIndex(index);
             }
-        } else {
-            setActiveIndex(index);
         }
     };
 
@@ -164,43 +174,36 @@ const TarotTable: React.FC<TarotTableProps> = ({ onReadingComplete }) => {
 
         // ANIMATION: FLYING TO SLOT
         if (flyingCard && flyingCard.deckIndex === index) {
-            // Calculate target position relative to the container center
-            // Container center is roughly screen center. 
-            // Slots are at top: ~30px from top.
-            // Fan center is roughly ~500px from top (translate-y-16 pushed it down).
-            
-            // X Offsets: 
-            // Slot 0 (Left): -96px (approx)
-            // Slot 1 (Center): 0px
-            // Slot 2 (Right): 96px
             const slotX = (flyingCard.slotIndex - 1) * 100; 
-            
-            // Y Offset: Needs to go UP significantly. 
-            // The fan is at `translate-y-16` (approx +64px). 
-            // The slot is at `top-8` (32px). 
-            // We need to move UP about 300-400px depending on screen.
             const moveUp = -350; 
 
             return {
                 transform: `translateX(${slotX}px) translateY(${moveUp}px) rotate(0deg) scale(0.45)`,
-                zIndex: 1000, // Top of everything
+                zIndex: 1000, 
                 opacity: 1,
                 transition: 'all 0.6s cubic-bezier(0.2, 0.8, 0.2, 1)',
                 boxShadow: '0 20px 50px rgba(0,0,0,0.5)'
             };
         }
 
-        // SHUFFLE ANIMATION
+        // SHUFFLE ANIMATION (Central Pile)
         if (phase === 'shuffle') {
-            const randomRot = Math.random() * 6 - 3;
-            const randomX = Math.random() * 4 - 2;
-            const randomY = Math.random() * 4 - 2;
+            // Messy pile effect
+            const randomRot = (index % 5) * 2 - 5; 
+            const randomX = (index % 3) * 2 - 3;
+            const randomY = (index % 4) * 2 - 4;
+            
+            // If shuffling, intense shake
+            const shakeX = isShuffling ? (Math.random() * 10 - 5) : 0;
+            const shakeY = isShuffling ? (Math.random() * 10 - 5) : 0;
+
             return {
-                transform: `translate(${randomX}px, ${randomY}px) rotate(${randomRot}deg)`,
+                transform: `translate(${randomX + shakeX}px, ${randomY + shakeY}px) rotate(${randomRot}deg)`,
                 opacity: 1,
                 zIndex,
-                transition: 'transform 0.1s',
-                transformOrigin: 'center center'
+                transition: isShuffling ? 'transform 0.05s' : 'transform 0.5s',
+                transformOrigin: 'center center',
+                cursor: 'pointer'
             };
         }
 
@@ -262,7 +265,6 @@ const TarotTable: React.FC<TarotTableProps> = ({ onReadingComplete }) => {
                 yTranslate = 20; 
             }
 
-            // If we are completing, fade out the remaining deck
             const opacity = phase === 'completing' ? 0 : 1;
             const finalScale = phase === 'completing' ? 0.8 : scale;
 
@@ -277,7 +279,7 @@ const TarotTable: React.FC<TarotTableProps> = ({ onReadingComplete }) => {
         return {};
     };
 
-    // Helper Component for the Card Back Visuals (Reused in Deck and Slots)
+    // Helper Component for the Card Back Visuals
     const CardBackVisual = () => (
         <div className="absolute inset-0 bg-obsidian rounded-lg border border-gold/60 flex items-center justify-center overflow-hidden">
             {/* Elaborate Back Pattern */}
@@ -311,7 +313,6 @@ const TarotTable: React.FC<TarotTableProps> = ({ onReadingComplete }) => {
             <div className="absolute top-8 left-0 right-0 z-20 flex justify-center gap-4 transition-all duration-500">
                 {[0, 1, 2].map((slotIndex) => {
                     const card = selectedCards[slotIndex];
-                    // Calculate if this slot is the target of the current flying card
                     const isTargetOfFlying = flyingCard?.slotIndex === slotIndex;
 
                     return (
@@ -326,14 +327,12 @@ const TarotTable: React.FC<TarotTableProps> = ({ onReadingComplete }) => {
                             `}
                         >
                             {card ? (
-                                // Show Card Back when settled in slot
                                 <div className="w-full h-full animate-[pop-in_0.3s_ease-out]">
                                     <div className="w-full h-full relative rounded-lg overflow-hidden transform scale-100">
                                          <CardBackVisual />
                                     </div>
                                 </div>
                             ) : (
-                                // Empty Slot Marker
                                 !isTargetOfFlying && (
                                     <div className="text-white/10 text-xl font-serif">
                                         {slotIndex === 0 ? 'Ⅰ' : slotIndex === 1 ? 'Ⅱ' : 'Ⅲ'}
@@ -345,24 +344,11 @@ const TarotTable: React.FC<TarotTableProps> = ({ onReadingComplete }) => {
                 })}
             </div>
 
-            {/* --- PHASE 1: SHUFFLE UI --- */}
+            {/* --- PHASE 1: SHUFFLE TEXT HINT --- */}
             {phase === 'shuffle' && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center z-50 pointer-events-none">
-                    <div className="text-gold font-mystic text-3xl mb-8 animate-pulse tracking-[0.3em]">THE SHUFFLE</div>
-                    <div className="absolute bottom-24 pointer-events-auto">
-                        <button 
-                            onClick={handleShuffle}
-                            disabled={isShuffling}
-                            className={`
-                                w-24 h-24 rounded-full border border-gold/50 text-gold flex items-center justify-center
-                                shadow-[0_0_30px_rgba(197,160,89,0.2)] bg-midnight/80 backdrop-blur-sm
-                                transition-all active:scale-95 hover:bg-gold/10 hover:shadow-[0_0_50px_rgba(197,160,89,0.4)]
-                                ${isShuffling ? 'animate-[spin_1s_linear_infinite] border-t-transparent opacity-80' : 'animate-bounce'}
-                            `}
-                        >
-                            <span className="text-4xl filter drop-shadow-lg">{isShuffling ? '✨' : '✋'}</span>
-                        </button>
-                    </div>
+                <div className="absolute top-1/4 w-full flex flex-col items-center justify-center z-10 pointer-events-none animate-pulse">
+                    <div className="text-gold font-mystic text-lg tracking-[0.3em] mb-2 text-glow">THE DECK AWAITS</div>
+                    <div className="text-[10px] text-white/40 uppercase tracking-widest">Tap the cards to shuffle</div>
                 </div>
             )}
 
@@ -385,15 +371,14 @@ const TarotTable: React.FC<TarotTableProps> = ({ onReadingComplete }) => {
                         className={`
                             absolute w-44 h-80 rounded-lg border border-gold/40 shadow-[-5px_0_10px_rgba(0,0,0,0.5)] cursor-pointer preserve-3d
                             will-change-transform
-                            ${isShuffling ? 'animate-[shake_0.2s_infinite]' : ''}
                         `}
                     >
-                        {/* CARD BACK (Always visible initially) */}
+                        {/* CARD BACK */}
                         <div className="absolute inset-0 backface-hidden bg-obsidian rounded-lg border border-gold/60 flex items-center justify-center overflow-hidden">
                              <CardBackVisual />
                         </div>
 
-                        {/* CARD FRONT (Rotated 180, hidden until flipped in other views) */}
+                        {/* CARD FRONT */}
                         <div 
                             className="absolute inset-0 backface-hidden rotate-y-180 bg-midnight rounded-lg border flex flex-col items-center justify-center text-center p-4 shadow-[0_0_50px_rgba(0,0,0,1)]"
                             style={{ borderColor: card.theme_color }}
