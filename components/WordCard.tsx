@@ -1,32 +1,22 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { WordData } from '../types';
-import { chatWithLogos } from '../services/geminiService';
 
 interface WordCardProps {
   data: WordData;
-  onNext: () => void; // Mapped to "Remember" (Right)
-  onHard: () => void; // Mapped to "Forget" (Left)
+  onNext: () => void; // Remember
+  onHard: () => void; // Forget
 }
 
 const WordCard: React.FC<WordCardProps> = ({ data, onNext, onHard }) => {
   const [isFlipped, setIsFlipped] = useState(false);
   const [swipeDir, setSwipeDir] = useState<'left' | 'right' | null>(null);
   
-  // Chat State
-  const [showChat, setShowChat] = useState(false);
-  const [chatInput, setChatInput] = useState("");
-  const [chatHistory, setChatHistory] = useState<string[]>([]);
-  const [loadingChat, setLoadingChat] = useState(false);
-
   // Audio Ref
   const synthRef = useRef<SpeechSynthesis | null>(null);
 
   useEffect(() => {
-    // Reset state when data changes (new card)
     setIsFlipped(false);
     setSwipeDir(null);
-    setShowChat(false);
-    setChatHistory([]);
     if (typeof window !== 'undefined') {
         synthRef.current = window.speechSynthesis;
     }
@@ -35,11 +25,10 @@ const WordCard: React.FC<WordCardProps> = ({ data, onNext, onHard }) => {
   const playAudio = (e?: React.MouseEvent) => {
     e?.stopPropagation();
     if (synthRef.current) {
-        // Cancel existing to avoid queue buildup
         synthRef.current.cancel(); 
         const utterance = new SpeechSynthesisUtterance(data.word);
         utterance.lang = 'en-US';
-        utterance.rate = 0.9;
+        utterance.rate = 0.8; 
         synthRef.current.speak(utterance);
     }
   };
@@ -47,42 +36,28 @@ const WordCard: React.FC<WordCardProps> = ({ data, onNext, onHard }) => {
   const handleDecision = (decision: 'remember' | 'forget') => {
       const dir = decision === 'remember' ? 'right' : 'left';
       setSwipeDir(dir);
-
-      // Wait for animation to finish before switching data
       setTimeout(() => {
-          if (decision === 'remember') {
-              onNext();
-          } else {
-              onHard();
-          }
-      }, 500); // Match CSS duration
-  };
-
-  const handleChat = async () => {
-    if(!chatInput.trim()) return;
-    setLoadingChat(true);
-    const userMsg = chatInput;
-    setChatHistory(prev => [...prev, `Seeker: ${userMsg}`]);
-    setChatInput("");
-    
-    const response = await chatWithLogos(chatHistory, userMsg);
-    setChatHistory(prev => [...prev, `Logos: ${response}`]);
-    setLoadingChat(false);
+          if (decision === 'remember') onNext();
+          else onHard();
+      }, 500); 
   };
 
   // Logic to determine Card Styles based on swipe
   const getCardTransform = () => {
       if (!swipeDir) return '';
-      if (swipeDir === 'right') return 'translate-x-[150%] rotate-12 opacity-0';
-      if (swipeDir === 'left') return '-translate-x-[150%] -rotate-12 opacity-0';
+      if (swipeDir === 'right') return 'translate-x-[120%] rotate-12 opacity-0';
+      if (swipeDir === 'left') return '-translate-x-[120%] -rotate-12 opacity-0';
       return '';
   };
 
+  // Helper to extract the core nuance sentence
+  const shortNuance = data.nuance.split('。')[0] + '。';
+
   return (
-    <div className="flex flex-col h-full w-full relative py-2">
+    <div className="flex flex-col h-full w-full relative py-2 items-center justify-center">
         
-        {/* Card Container with Perspective */}
-        <div className="flex-1 w-full relative perspective-1000 mb-16">
+        {/* Card Container */}
+        <div className="w-full max-w-[340px] aspect-[3/5] relative perspective-1000">
             
             <div 
                 className={`
@@ -93,198 +68,168 @@ const WordCard: React.FC<WordCardProps> = ({ data, onNext, onHard }) => {
             >
                 
                 {/* ============================================================
-                    SIDE A: THE PUZZLE (ENIGMA) - "GUESS THE MEANING"
+                    SIDE A: THE PUZZLE (线索面 - 复杂、笔记、引导猜测)
                    ============================================================ */}
-                <div className="absolute inset-0 backface-hidden bg-obsidian rounded-2xl border border-gold/30 shadow-glow overflow-hidden flex flex-col">
-                    {/* Background Texture */}
-                    <div className="absolute inset-0 bg-noise opacity-10 mix-blend-overlay pointer-events-none"></div>
-                    <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-gold/50 to-transparent"></div>
+                <div 
+                    className="absolute inset-0 backface-hidden bg-[#E3DAC9] overflow-hidden shadow-2xl"
+                    style={{
+                        clipPath: 'polygon(0 0, 100% 0, 100% 95%, 90% 100%, 0 100%)' // Subtle cut corner
+                    }}
+                >
+                    {/* --- TEXTURE: The "Dirty" Researcher's Notebook --- */}
+                    <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/aged-paper.png')] opacity-40 mix-blend-multiply pointer-events-none"></div>
+                    <div className="absolute inset-0 bg-gradient-to-b from-[#D4C5A9] via-transparent to-[#C0B090] opacity-60 pointer-events-none"></div>
+                    {/* Stains */}
+                    <div className="absolute top-10 right-[-20px] w-24 h-24 bg-[#8B4513] opacity-10 blur-xl rounded-full mix-blend-multiply"></div>
+                    <div className="absolute bottom-20 left-10 w-32 h-32 bg-[#2F4F4F] opacity-5 blur-2xl rounded-full mix-blend-multiply"></div>
 
-                    {/* 1. Header: The Word & Audio */}
-                    <div className="pt-10 pb-6 flex flex-col items-center relative z-10">
-                        <div className="text-[10px] text-gold/40 uppercase tracking-[0.3em] mb-2">Decipher The Glyphs</div>
+                    {/* CONTENT */}
+                    <div className="relative h-full flex flex-col p-6 z-10 text-[#3E342A]">
                         
-                        <h2 className="text-4xl text-center font-mystic text-gold text-glow tracking-wide mb-3">
-                            {data.word}
-                        </h2>
-                        
-                        <div className="flex items-center gap-3">
-                            <span className="font-serif italic text-gold/60">{data.phonetic}</span>
+                        {/* 1. Header: Audio & Phonetic (No Meaning yet!) */}
+                        <div className="flex justify-between items-start mb-6 border-b border-[#3E342A]/20 pb-4">
+                            <div className="flex flex-col">
+                                <span className="text-[10px] uppercase tracking-[0.2em] opacity-60 mb-1">Subject</span>
+                                <div className="flex items-baseline gap-2">
+                                    <span className="font-serif font-bold text-2xl tracking-wide">{data.word}</span>
+                                </div>
+                                <span className="font-serif italic opacity-60 text-sm mt-1">{data.phonetic}</span>
+                            </div>
                             <button 
                                 onClick={playAudio}
-                                className="w-8 h-8 rounded-full bg-gold/10 flex items-center justify-center text-gold hover:bg-gold/20 transition-colors"
+                                className="w-10 h-10 rounded-full border border-[#3E342A]/20 flex items-center justify-center hover:bg-[#3E342A]/5 active:scale-95 transition-all text-[#3E342A]"
                             >
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
                                   <path strokeLinecap="round" strokeLinejoin="round" d="M19.114 5.636a9 9 0 010 12.728M16.463 8.288a5.25 5.25 0 010 7.424M6.75 8.25l4.72-4.72a.75.75 0 011.28.53v15.88a.75.75 0 01-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.01 9.01 0 012.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75z" />
                                 </svg>
                             </button>
                         </div>
-                    </div>
 
-                    {/* 2. The Clues (Formula) */}
-                    <div className="flex-1 flex flex-col items-center justify-center px-6 relative z-10">
-                        {/* Clue Connector Visual */}
-                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-20">
-                            <div className="w-[1px] h-full bg-gradient-to-b from-transparent via-gold to-transparent"></div>
-                            <div className="absolute w-full h-[1px] bg-gradient-to-r from-transparent via-gold to-transparent"></div>
-                        </div>
-
-                        {/* Breakdown */}
-                        <div className="w-full space-y-4 bg-midnight/50 backdrop-blur-sm p-6 rounded-lg border border-gold/10">
+                        {/* 2. The Formula (Roots) - The "Guide" */}
+                        <div className="mb-6 space-y-3 bg-[#F5F0E6]/50 p-4 rounded-sm border border-[#3E342A]/10 rotate-[-1deg] shadow-sm">
+                            <span className="text-[9px] uppercase tracking-widest opacity-50 block mb-2">Composition Analysis</span>
                             {data.components.map((c, i) => (
-                                <div key={i} className="flex justify-between items-center group">
-                                    <div className="flex items-center gap-2">
-                                        <span className={`w-2 h-2 rounded-full ${c.type === 'root' ? 'bg-gold' : 'bg-gold/30'}`}></span>
-                                        <span className="font-serif text-lg text-parchment">{c.part}</span>
-                                    </div>
-                                    <div className="h-[1px] flex-1 mx-4 bg-white/10 border-t border-dashed border-white/20"></div>
-                                    <span className="font-serif text-gold/80 italic">{c.meaning}</span>
+                                <div key={i} className="flex items-center text-sm">
+                                    <span className="font-bold w-16 font-serif">{c.part}</span>
+                                    <span className="mx-2 opacity-30">→</span>
+                                    <span className="italic opacity-80 bg-[#C5A059]/20 px-1 rounded">{c.meaning}</span>
                                 </div>
                             ))}
                         </div>
-                        
-                        {/* The Synthesis Question */}
-                        <div className="mt-8 text-center">
-                            <p className="text-gold/60 text-xs uppercase tracking-widest mb-2">Synthesis Logic</p>
-                            <p className="text-parchment font-serif text-lg leading-relaxed">
-                                "{data.etymology_story.logic.split('→')[0].trim()}..."
-                            </p>
-                            <p className="text-gold animate-pulse mt-2">?</p>
-                        </div>
-                    </div>
 
-                    {/* 3. Unlock Action */}
-                    <div className="p-8 pb-10 flex justify-center z-10">
-                         <button 
-                            onClick={() => setIsFlipped(true)}
-                            className="group relative px-8 py-3 bg-gradient-to-b from-gold to-[#8a7038] text-midnight font-bold tracking-widest uppercase rounded-full shadow-[0_0_20px_rgba(197,160,89,0.4)] hover:shadow-[0_0_35px_rgba(197,160,89,0.6)] hover:scale-105 transition-all active:scale-95"
-                        >
-                            <span className="flex items-center gap-2">
-                                <span className="text-xl">🔓</span> Reveal Meaning
-                            </span>
-                            {/* Shine Effect */}
-                            <div className="absolute inset-0 rounded-full bg-white/20 group-hover:animate-pulse"></div>
-                        </button>
+                        {/* 3. The Story/Logic - The "Guessing Context" */}
+                        <div className="flex-1 overflow-y-auto pr-2 relative">
+                             {/* Quote Mark */}
+                            <div className="absolute -top-2 -left-2 text-4xl text-[#C5A059] opacity-20 font-serif">“</div>
+                            
+                            <div className="mt-2 space-y-4">
+                                <div>
+                                    <h4 className="text-[10px] font-bold uppercase opacity-60 mb-1">Origin Scene</h4>
+                                    <p className="font-serif text-sm leading-relaxed text-justify opacity-90 border-l-2 border-[#8A2323]/40 pl-3">
+                                        {data.etymology_story.origin_image}
+                                    </p>
+                                </div>
+                                <div>
+                                    <h4 className="text-[10px] font-bold uppercase opacity-60 mb-1">Logic Chain</h4>
+                                    <p className="font-serif text-sm leading-relaxed text-justify opacity-90">
+                                        {data.etymology_story.logic.split('→').map((chunk, idx, arr) => (
+                                            <span key={idx}>
+                                                {chunk.trim()}
+                                                {idx < arr.length - 1 && <span className="text-[#8A2323] mx-1">➜</span>}
+                                            </span>
+                                        ))}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* 4. Unlock Button */}
+                        <div className="mt-4 pt-4 border-t border-[#3E342A]/10 flex justify-center">
+                            <button 
+                                onClick={() => setIsFlipped(true)}
+                                className="group flex flex-col items-center gap-1 opacity-70 hover:opacity-100 transition-opacity"
+                            >
+                                <div className="w-12 h-12 rounded-full border-2 border-[#8A2323] flex items-center justify-center text-[#8A2323] shadow-sm group-hover:bg-[#8A2323] group-hover:text-[#E3DAC9] transition-colors">
+                                    <span className="text-xl">🔓</span>
+                                </div>
+                                <span className="text-[10px] uppercase tracking-widest font-bold text-[#8A2323]">Unlock Truth</span>
+                            </button>
+                        </div>
                     </div>
                 </div>
 
 
                 {/* ============================================================
-                    SIDE B: THE REVELATION (TRUTH) - ANSWER & SORTING
+                    SIDE B: THE TRUTH (真相面 - 极简、仪式感、答案)
                    ============================================================ */}
-                <div className="absolute inset-0 backface-hidden rotate-y-180 bg-obsidian rounded-2xl border-2 border-gold flex flex-col shadow-glow-strong overflow-hidden">
-                    {/* Inner Content Scroller */}
-                    <div className="flex-1 overflow-y-auto custom-scrollbar relative">
-                        {/* Header: Meaning */}
-                        <div className="p-8 pb-6 bg-gradient-to-b from-gold/10 to-transparent text-center border-b border-gold/10">
-                             <div className="text-[10px] text-gold/50 uppercase tracking-[0.3em] mb-3">The Truth</div>
-                             <h2 className="font-serif text-3xl font-bold text-parchment mb-2 text-glow">
-                                {data.etymology_story.modern_meaning.split(' ')[1] || data.etymology_story.modern_meaning}
-                             </h2>
-                             <div className="text-gold/60 text-sm font-serif italic">{data.word} {data.phonetic}</div>
-                        </div>
+                <div 
+                    className="absolute inset-0 backface-hidden rotate-y-180 bg-[#0F111A] rounded-sm flex flex-col shadow-[0_0_30px_rgba(0,0,0,0.8)] border-2 border-[#C5A059]"
+                >
+                    {/* Inner Gold Frame */}
+                    <div className="absolute inset-1 border border-[#C5A059]/30 rounded-sm pointer-events-none"></div>
+                    <div className="absolute inset-3 border border-[#C5A059]/10 rounded-sm pointer-events-none"></div>
 
-                        {/* Detailed Story */}
-                        <div className="p-6 space-y-6">
-                            {/* Logic Chain */}
-                            <div className="p-4 bg-white/5 rounded border border-white/10">
-                                <div className="text-xs text-gold uppercase tracking-widest mb-2">Logic Chain</div>
-                                <p className="text-sm text-parchment/80 leading-relaxed font-serif">
-                                    {data.etymology_story.logic}
-                                </p>
-                            </div>
-
-                            {/* Story */}
-                            <div>
-                                <div className="flex items-center gap-2 mb-2">
-                                    <span className="text-gold text-lg">📜</span>
-                                    <span className="text-xs text-gold uppercase tracking-widest">Origin Story</span>
+                    {/* Content Container */}
+                    <div className="flex-1 flex flex-col items-center justify-center text-center p-8 relative z-10">
+                        
+                        {/* 1. The Icon (Visual Anchor) - Abstract Geometric Representation */}
+                        <div className="mb-8 relative">
+                            {/* Glowing Background */}
+                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-24 h-24 bg-[#C5A059] opacity-10 blur-xl rounded-full"></div>
+                            
+                            {/* The Symbol */}
+                            <div className="w-20 h-20 border-2 border-[#C5A059] rotate-45 flex items-center justify-center shadow-[0_0_15px_rgba(197,160,89,0.3)]">
+                                <div className="w-16 h-16 border border-[#C5A059]/50 flex items-center justify-center -rotate-45">
+                                    <span className="font-mystic text-4xl text-[#C5A059]">{data.word.charAt(0).toUpperCase()}</span>
                                 </div>
-                                <p className="text-sm font-serif text-parchment/90 leading-loose text-justify opacity-90">
-                                    {data.etymology_story.origin_image}
-                                </p>
-                            </div>
-
-                            {/* Chat Button (Small inline) */}
-                            <div className="pt-4 flex justify-center">
-                                <button 
-                                    onClick={() => setShowChat(true)}
-                                    className="text-gold/50 text-xs hover:text-gold flex items-center gap-1 transition-colors"
-                                >
-                                    <span>🔮</span> Ask Oracle about nuances
-                                </button>
                             </div>
                         </div>
+
+                        {/* 2. The Word (Beautiful Font) */}
+                        <h2 className="font-mystic text-3xl text-[#E3DAC9] tracking-widest mb-2 text-shadow-glow">
+                            {data.word}
+                        </h2>
+
+                        {/* 3. The Definition (Simple Answer) */}
+                        <div className="relative mb-6">
+                            <div className="h-[1px] w-12 bg-[#C5A059]/50 mx-auto mb-3"></div>
+                            <p className="text-2xl font-serif font-bold text-[#C5A059] tracking-wide">
+                                {data.etymology_story.modern_meaning.split(' ')[1] || data.etymology_story.modern_meaning}
+                            </p>
+                             <div className="h-[1px] w-12 bg-[#C5A059]/50 mx-auto mt-3"></div>
+                        </div>
+
+                        {/* 4. The Nuance/Sentence (Short context) */}
+                        <p className="text-[#E3DAC9]/70 font-serif italic text-sm leading-relaxed max-w-[90%]">
+                            "{shortNuance}"
+                        </p>
+
                     </div>
 
-                    {/* SORTING ACTIONS (The Altar Slots) */}
-                    <div className="h-24 bg-midnight border-t border-gold/20 flex relative">
-                        
-                        {/* LEFT: FORGET (The Abyss) */}
+                    {/* 5. Action Buttons (Ritual) */}
+                    <div className="h-20 flex border-t border-[#C5A059]/30 relative z-20 bg-[#0F111A]">
+                        {/* FORGET (Abyss) */}
                         <button 
                             onClick={() => handleDecision('forget')}
-                            className="flex-1 flex flex-col items-center justify-center gap-1 group hover:bg-alchemist/20 transition-colors border-r border-white/5 relative overflow-hidden"
+                            className="flex-1 flex items-center justify-center gap-2 text-[#E3DAC9]/50 hover:text-[#8A2323] hover:bg-[#8A2323]/10 transition-colors border-r border-[#C5A059]/20"
                         >
-                            <span className="text-2xl opacity-50 group-hover:scale-125 group-hover:opacity-100 transition-all duration-300">💀</span>
-                            <span className="text-[10px] uppercase tracking-widest text-white/40 group-hover:text-alchemist">Forget</span>
-                            {/* Hover Glow */}
-                            <div className="absolute inset-0 bg-radial-gradient from-alchemist/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                            <span className="text-lg">✖</span>
+                            <span className="text-xs uppercase tracking-widest font-bold">Forget</span>
                         </button>
 
-                        {/* CENTER DECORATION */}
-                        <div className="w-12 flex items-center justify-center relative z-10">
-                            <div className="w-8 h-8 rounded-full border border-gold/30 bg-midnight flex items-center justify-center">
-                                <span className="text-gold/50 text-xs">⚖️</span>
-                            </div>
-                        </div>
-
-                        {/* RIGHT: REMEMBER (The Sanctum) */}
+                        {/* REMEMBER (Sanctum) */}
                         <button 
                             onClick={() => handleDecision('remember')}
-                            className="flex-1 flex flex-col items-center justify-center gap-1 group hover:bg-gold/20 transition-colors border-l border-white/5 relative overflow-hidden"
+                            className="flex-1 flex items-center justify-center gap-2 text-[#E3DAC9]/50 hover:text-[#C5A059] hover:bg-[#C5A059]/10 transition-colors"
                         >
-                            <span className="text-2xl opacity-50 group-hover:scale-125 group-hover:opacity-100 transition-all duration-300">☀️</span>
-                            <span className="text-[10px] uppercase tracking-widest text-white/40 group-hover:text-gold">Mastered</span>
-                            {/* Hover Glow */}
-                            <div className="absolute inset-0 bg-radial-gradient from-gold/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                            <span className="text-xs uppercase tracking-widest font-bold">Remember</span>
+                            <span className="text-lg">✔</span>
                         </button>
-
                     </div>
                 </div>
 
             </div>
         </div>
-
-        {/* Chat Interface (Overlay) */}
-        {showChat && (
-             <div className="absolute inset-0 z-50 bg-black/90 backdrop-blur-md flex flex-col m-2 rounded-xl border border-gold/30 overflow-hidden animate-fade-in">
-                <div className="p-3 border-b border-gold/20 bg-midnight flex justify-between items-center">
-                    <span className="font-mystic text-gold text-sm">Logos Oracle</span>
-                    <button onClick={() => setShowChat(false)} className="text-gold/50 hover:text-gold">✕</button>
-                </div>
-                <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-midnight/50 custom-scrollbar">
-                    {chatHistory.length === 0 && <div className="text-xs text-gold/30 text-center mt-10">Ask regarding "{data.word}"...</div>}
-                    {chatHistory.map((msg, i) => {
-                        const isUser = msg.startsWith('Seeker:');
-                        return (
-                            <div key={i} className={`p-3 text-sm rounded border ${isUser ? 'bg-white/5 border-white/10 text-parchment self-end' : 'bg-gold/10 border-gold/20 text-gold self-start'}`}>
-                                {msg.replace(/^(Seeker:|Logos:)\s*/, '')}
-                            </div>
-                        )
-                    })}
-                    {loadingChat && <div className="text-xs text-gold/50 animate-pulse text-center">Divining...</div>}
-                </div>
-                <div className="p-3 bg-midnight border-t border-gold/20 flex gap-2">
-                    <input 
-                        value={chatInput}
-                        onChange={(e) => setChatInput(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && handleChat()}
-                        className="flex-1 bg-white/5 border border-white/10 rounded px-3 py-2 text-sm text-parchment focus:border-gold outline-none placeholder-white/20"
-                        placeholder="Inquire..."
-                    />
-                </div>
-             </div>
-        )}
     </div>
   );
 };
