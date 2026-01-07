@@ -8,9 +8,10 @@ import Bookshelf from './components/Bookshelf';
 import NavBar from './components/NavBar';
 import Profile from './components/Profile';
 import { initialVocabulary } from './data/vocabulary';
+import { TAROT_DECK } from './data/tarot'; // Import for mock data
 import { getProphecy } from './data/tarot';
 import { getOracleReading } from './services/geminiService';
-import { WordData, TarotArcana, DailyProphecy, OracleTopic, TarotReadingResponse, Grimoire, AppState } from './types';
+import { WordData, TarotArcana, DailyProphecy, OracleTopic, TarotReadingResponse, Grimoire, AppState, ProphecyRecord } from './types';
 
 // Tab Logic Type
 type MainTab = 'oracle' | 'grimoire' | 'profile';
@@ -32,6 +33,31 @@ const App: React.FC = () => {
   
   // Prophecy State (The Active Overlay)
   const [prophecyData, setProphecyData] = useState<DailyProphecy | null>(null);
+  
+  // History State (Mock Data for Profile)
+  const [prophecyHistory, setProphecyHistory] = useState<ProphecyRecord[]>([
+      {
+          id: 'mock-1',
+          date: 'October 24',
+          card: TAROT_DECK.find(c => c.id === 'Magician') || TAROT_DECK[1],
+          prophecy_text: "手中的魔杖已准备好，今日的积累将构筑明日的城堡。",
+          words_sealed: 15
+      },
+      {
+          id: 'mock-2',
+          date: 'October 23',
+          card: TAROT_DECK.find(c => c.id === 'Hermit') || TAROT_DECK[3],
+          prophecy_text: "真理往往藏在深处，孤独是你最好的导师。",
+          words_sealed: 8
+      },
+      {
+          id: 'mock-3',
+          date: 'October 22',
+          card: TAROT_DECK.find(c => c.id === 'WheelOfFortune') || TAROT_DECK[4],
+          prophecy_text: "命运之轮转动，旧的知识将在今日完成闭环。",
+          words_sealed: 22
+      }
+  ]);
 
   // Oracle Reading State
   const [oracleTopic, setOracleTopic] = useState<OracleTopic | null>(null);
@@ -100,6 +126,16 @@ const App: React.FC = () => {
       
       // Move to Prophecy Reveal State (Still under Oracle Tab)
       setAppState('prophecy_reveal');
+
+      // Add to History (In a real app, do this after completion)
+      const newRecord: ProphecyRecord = {
+          id: Date.now().toString(),
+          date: new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric' }),
+          card: firstCard,
+          prophecy_text: p.prophecy_text.split('。')[0] + '。', // Shorten
+          words_sealed: finalDeck.length
+      };
+      setProphecyHistory(prev => [newRecord, ...prev]);
   };
 
   const handleAcceptProphecy = () => {
@@ -230,7 +266,7 @@ const App: React.FC = () => {
           return (
             <Profile 
                 currentBook={selectedBook} 
-                collectedCards={readingCards} 
+                prophecyHistory={prophecyHistory}
                 onChangeBook={handleChangeBook}
             />
           );

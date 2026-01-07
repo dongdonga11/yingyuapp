@@ -96,6 +96,14 @@ export interface DailyProphecy {
     prophecy_text: string; // The philosophical flavor text
 }
 
+export interface ProphecyRecord {
+    id: string;
+    date: string;
+    card: TarotArcana;
+    prophecy_text: string;
+    words_sealed: number;
+}
+
 // --- ORACLE READING TYPES ---
 
 export type OracleTopic = 'love' | 'wealth' | 'energy' | 'decision';
