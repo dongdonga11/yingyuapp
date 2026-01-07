@@ -126,4 +126,4 @@ export interface TarotReadingResponse {
     synthesis_content: string; // "综上所述，虽然...但是...建议..."
 }
 
-export type AppState = 'library' | 'altar' | 'prophecy_reveal' | 'learning' | 'oracle_ready' | 'oracle_reading' | 'profile';
+export type AppState = 'library' | 'oracle_start' | 'altar' | 'prophecy_reveal' | 'learning' | 'oracle_ready' | 'oracle_reading' | 'profile';

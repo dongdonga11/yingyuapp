@@ -7,6 +7,7 @@ import ShareCard from './components/ShareCard';
 import Bookshelf from './components/Bookshelf';
 import NavBar from './components/NavBar';
 import Profile from './components/Profile';
+import StartScreen from './components/StartScreen';
 import { initialVocabulary } from './data/vocabulary';
 import { TAROT_DECK } from './data/tarot'; // Import for mock data
 import { getProphecy } from './data/tarot';
@@ -81,14 +82,19 @@ const App: React.FC = () => {
   // Called when user selects a book from the Grimoire Tab (Library)
   const handleBookSelected = (book: Grimoire) => {
       setSelectedBook(book);
-      // After selecting a book, we automatically move the user to the Altar to begin their journey
-      setAppState('altar'); 
+      // Change: Move to Start Screen instead of directly to Altar
+      setAppState('oracle_start'); 
       setActiveTab('oracle');
   };
   
   // Called from Profile to "Change Book" (Redirects to Grimoire tab)
   const handleChangeBook = () => {
       setActiveTab('grimoire');
+  };
+
+  // Called from Start Screen
+  const handleStartOracle = () => {
+      setAppState('altar');
   };
 
   // 1. Handle Completion of 3-Card Draw
@@ -195,7 +201,8 @@ const App: React.FC = () => {
   };
 
   const handleReset = () => {
-      setAppState('altar');
+      // Return to Start Screen after a full session reset
+      setAppState('oracle_start');
       setReadingCards([]);
       setUnlockedIndices(new Set());
       setProphecyData(null);
@@ -254,7 +261,6 @@ const App: React.FC = () => {
       // =========================================================
       // TAB 2: GRIMOIRE (LIBRARY / BOOK SELECTION)
       // =========================================================
-      // This is now strictly for browsing and selecting books.
       if (activeTab === 'grimoire') {
           return <Bookshelf onBookSelected={handleBookSelected} />;
       }
@@ -275,10 +281,14 @@ const App: React.FC = () => {
       // =========================================================
       // TAB 1: ORACLE (THE MAIN JOURNEY)
       // =========================================================
-      // This handles the entire flow: Altar -> Prophecy -> Learning -> Oracle Reading
       
+      // 0. NEW: START SCREEN
+      if (appState === 'oracle_start' && selectedBook) {
+          return <StartScreen book={selectedBook} onStart={handleStartOracle} />;
+      }
+
       // 1. Initial State: The Altar (Shuffle & Draw)
-      if (appState === 'altar' || appState === 'library') {
+      if (appState === 'altar') {
           return (
             <div className="relative w-full h-full flex flex-col pb-20">
                 {selectedBook && (
@@ -298,7 +308,6 @@ const App: React.FC = () => {
       }
 
       // 3. Learning Mode (Flashcards)
-      // This is now part of the Oracle tab, as it is the "Mission" given by the Oracle.
       if (appState === 'learning') {
           return (
             <div className="w-full h-full flex flex-col relative animate-fade-in">
@@ -516,6 +525,9 @@ const App: React.FC = () => {
       return <Bookshelf onBookSelected={handleBookSelected} />;
   }
 
+  // --- LOGIC: HIDE NAVBAR ON START SCREEN ---
+  const showNavBar = appState !== 'oracle_start' && appState !== 'library';
+
   return (
     <Layout themeColor={appState === 'oracle_reading' ? '#9333EA' : currentActiveArcana?.theme_color}>
       
@@ -524,8 +536,10 @@ const App: React.FC = () => {
           {renderContent()}
       </div>
 
-      {/* NAVIGATION BAR (Always present after initial book selection) */}
-      <NavBar currentTab={activeTab} onChange={handleTabChange} />
+      {/* NAVIGATION BAR (Conditional) */}
+      {showNavBar && (
+          <NavBar currentTab={activeTab} onChange={handleTabChange} />
+      )}
 
       {/* GLOBAL OVERLAYS */}
       {showShareCard && oracleResult && (

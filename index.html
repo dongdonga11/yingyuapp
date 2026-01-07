@@ -96,6 +96,14 @@
         border: 1px solid #C5A059;
         border-radius: 4px;
       }
+      /* Utility to hide scrollbar but keep functionality */
+      .no-scrollbar::-webkit-scrollbar {
+        display: none;
+      }
+      .no-scrollbar {
+        -ms-overflow-style: none;  /* IE and Edge */
+        scrollbar-width: none;  /* Firefox */
+      }
       /* Text Glow Utility */
       .text-glow {
         text-shadow: 0 0 10px rgba(197, 160, 89, 0.3);
