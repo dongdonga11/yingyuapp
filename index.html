@@ -32,6 +32,36 @@
             },
             backgroundImage: {
               'noise': "url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI1MCIgaGVpZ2h0PSI1MCI+PHBhdGggZD0iTTAgMGg1MHY1MEgwVjB6IiBmaWxsPSIjMDgxMTFBIi8+PHJlY3Qgd2lkdGg9IjUwIiBoZWlnaHQ9IjUwIiBmaWxsPSIjMDgxMTFBIi8+PC9zdmc+')", // Simplified noise placeholder
+            },
+            keyframes: {
+              'fade-in': {
+                '0%': { opacity: '0' },
+                '100%': { opacity: '1' },
+              },
+              'pop-in': {
+                '0%': { opacity: '0', transform: 'scale(0.5)' },
+                '100%': { opacity: '1', transform: 'scale(1)' },
+              },
+              'unroll': {
+                '0%': { opacity: '0', transform: 'scaleY(0)' },
+                '100%': { opacity: '1', transform: 'scaleY(1)' },
+              },
+              'float': {
+                '0%, 100%': { transform: 'translateY(0)' },
+                '50%': { transform: 'translateY(-10px)' },
+              },
+              'shake': {
+                '0%, 100%': { transform: 'translateX(0)' },
+                '25%': { transform: 'translateX(-2px)' },
+                '75%': { transform: 'translateX(2px)' },
+              }
+            },
+            animation: {
+              'fade-in': 'fade-in 0.5s ease-out forwards',
+              'pop-in': 'pop-in 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards',
+              'unroll': 'unroll 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) forwards',
+              'float': 'float 3s ease-in-out infinite',
+              'shake': 'shake 0.2s ease-in-out infinite',
             }
           },
         },

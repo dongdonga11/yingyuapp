@@ -70,9 +70,9 @@ export interface TarotArcana {
 
 export interface DailyProphecy {
     arcana: TarotArcana;
-    lucky_word: string; // The "Key" word
-    lucky_meaning: string;
-    dos: string[]; // 宜
-    donts: string[]; // 忌
-    prophecy_text: string; // The final philosophical reveal
+    intro_text: string; // "卡片隐藏在任务中..."
+    mission_title: string; // "今日任务：..."
+    mission_desc: string;
+    reward_text: string; // "任务奖励：..."
+    prophecy_text: string; // The philosophical flavor text
 }
