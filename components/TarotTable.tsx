@@ -41,7 +41,7 @@ const TarotTable: React.FC<TarotTableProps> = ({ onReadingComplete }) => {
     const handleShuffle = () => {
         if(isShuffling) return;
         setIsShuffling(true);
-        // Shake animation plays via CSS class based on isShuffling state
+        // Shake animation plays via CSS class on the inner wrapper
         setTimeout(() => {
             setIsShuffling(false);
             setPhase('spread');
@@ -193,15 +193,12 @@ const TarotTable: React.FC<TarotTableProps> = ({ onReadingComplete }) => {
             const randomX = (index % 3) * 2 - 3;
             const randomY = (index % 4) * 2 - 4;
             
-            // If shuffling, intense shake
-            const shakeX = isShuffling ? (Math.random() * 10 - 5) : 0;
-            const shakeY = isShuffling ? (Math.random() * 10 - 5) : 0;
-
+            // We use CSS animation for the shake, so we don't need dynamic randoms here
             return {
-                transform: `translate(${randomX + shakeX}px, ${randomY + shakeY}px) rotate(${randomRot}deg)`,
+                transform: `translate(${randomX}px, ${randomY}px) rotate(${randomRot}deg)`,
                 opacity: 1,
                 zIndex,
-                transition: isShuffling ? 'transform 0.05s' : 'transform 0.5s',
+                transition: 'transform 0.5s',
                 transformOrigin: 'center center',
                 cursor: 'pointer'
             };
@@ -373,19 +370,23 @@ const TarotTable: React.FC<TarotTableProps> = ({ onReadingComplete }) => {
                             will-change-transform
                         `}
                     >
-                        {/* CARD BACK */}
-                        <div className="absolute inset-0 backface-hidden bg-obsidian rounded-lg border border-gold/60 flex items-center justify-center overflow-hidden">
-                             <CardBackVisual />
-                        </div>
+                        {/* Wrapper for Shake Animation to avoid transform conflicts */}
+                        <div className={`w-full h-full relative preserve-3d ${isShuffling ? 'animate-[shake_0.1s_linear_infinite]' : ''}`}>
+                            
+                            {/* CARD BACK */}
+                            <div className="absolute inset-0 backface-hidden bg-obsidian rounded-lg border border-gold/60 flex items-center justify-center overflow-hidden">
+                                <CardBackVisual />
+                            </div>
 
-                        {/* CARD FRONT */}
-                        <div 
-                            className="absolute inset-0 backface-hidden rotate-y-180 bg-midnight rounded-lg border flex flex-col items-center justify-center text-center p-4 shadow-[0_0_50px_rgba(0,0,0,1)]"
-                            style={{ borderColor: card.theme_color }}
-                        >
-                            <div className="flex-1 flex flex-col justify-center w-full relative">
-                                <div className="text-7xl mb-6">{card.icon}</div>
-                                <h3 className="font-mystic text-xl text-white uppercase tracking-widest mb-2">{card.name}</h3>
+                            {/* CARD FRONT */}
+                            <div 
+                                className="absolute inset-0 backface-hidden rotate-y-180 bg-midnight rounded-lg border flex flex-col items-center justify-center text-center p-4 shadow-[0_0_50px_rgba(0,0,0,1)]"
+                                style={{ borderColor: card.theme_color }}
+                            >
+                                <div className="flex-1 flex flex-col justify-center w-full relative">
+                                    <div className="text-7xl mb-6">{card.icon}</div>
+                                    <h3 className="font-mystic text-xl text-white uppercase tracking-widest mb-2">{card.name}</h3>
+                                </div>
                             </div>
                         </div>
                     </div>
