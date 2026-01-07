@@ -30,9 +30,15 @@ const App: React.FC = () => {
       
       const firstCard = cards[0];
       const filteredWords = firstCard.filter_logic(initialVocabulary);
-      // Ensure we have enough words to hide cards in. Duplicate if necessary for demo.
+      
+      // LOGIC UPDATE: Guarantee at least 6 cards in the deck
+      // If filtered result is too small, fallback to full vocabulary.
       let baseDeck = filteredWords.length > 0 ? filteredWords : initialVocabulary;
-      while (baseDeck.length < 3) {
+      
+      // If still less than 6 (e.g. filtered to 2 words, or initial is small), 
+      // duplicate the existing set until we reach at least 6.
+      // This ensures we have enough "slots" to hide the 3 Tarot cards comfortably.
+      while (baseDeck.length < 6) {
           baseDeck = [...baseDeck, ...baseDeck];
       }
 
@@ -42,6 +48,7 @@ const App: React.FC = () => {
       
       // Pick 3 unique random indices to hide the cards
       const indicesToHide: number[] = [];
+      // Loop until we have 3 unique indices (assuming deck length >= 3, which is guaranteed now)
       while(indicesToHide.length < 3 && indicesToHide.length < finalDeck.length) {
           const r = Math.floor(Math.random() * finalDeck.length);
           if(indicesToHide.indexOf(r) === -1) indicesToHide.push(r);

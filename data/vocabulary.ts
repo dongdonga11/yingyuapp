@@ -46,6 +46,25 @@ export const initialVocabulary: WordData[] = [
     nuance: "通常带有强制性，暗示被隔离者是‘非主流’的。",
     tags: ["GRE", "Greg家族"]
   },
+  {
+    id: "aggregate",
+    word: "Aggregate",
+    phonetic: "/ˈæɡrɪɡət/",
+    root_family: "Greg",
+    root_meaning: "羊群 (Flock)",
+    components: [
+      { part: "Ag-", meaning: "去，往 (To)", type: "prefix" },
+      { part: "greg", meaning: "羊群 (Flock)", type: "root" },
+      { part: "-ate", meaning: "动词 (Action)", type: "suffix" }
+    ],
+    etymology_story: {
+      origin_image: "秋天到了，牧羊人将几个小羊群从不同的山头驱赶到一个大山谷里，为了过冬将它们合并成一个巨大的羊群。",
+      logic: "把小的羊群加到一个大的羊群里 (Physical) → 总计，合计 (Math)。",
+      modern_meaning: "v. 合计，总计; n. 总数"
+    },
+    nuance: "强调由零散的部分组成一个整体（Sum），常用于数据统计。",
+    tags: ["TOEFL", "Greg家族"]
+  },
   
   // --- ROOT: SPECT (看) ---
   {
@@ -88,5 +107,24 @@ export const initialVocabulary: WordData[] = [
     },
     nuance: "有时暗示‘招摇’。",
     tags: ["SAT", "Spect家族"]
+  },
+  {
+    id: "perspective",
+    word: "Perspective",
+    phonetic: "/pəˈspɛktɪv/",
+    root_family: "Spect",
+    root_meaning: "看 (Look)",
+    components: [
+      { part: "Per-", meaning: "穿过 (Through)", type: "prefix" },
+      { part: "spect", meaning: "看 (Look)", type: "root" },
+      { part: "-ive", meaning: "名词/形容词", type: "suffix" }
+    ],
+    etymology_story: {
+      origin_image: "画家透过一个透明的玻璃框观察风景，为了在画布上画出远近的层次感。",
+      logic: "透过现象看本质/透过空间看距离 (Physical) → 视角，透视法 (Abstract)。",
+      modern_meaning: "n. 视角，观点；透视法"
+    },
+    nuance: "强调观察事物的‘角度’或‘深度’。",
+    tags: ["IELTS", "Spect家族"]
   }
 ];
