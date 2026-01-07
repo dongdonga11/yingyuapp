@@ -89,8 +89,8 @@ const App: React.FC = () => {
       {appState === 'learning' && deck.length > 0 && currentActiveArcana && (
         <div className="w-full h-full flex flex-col relative animate-fade-in">
             
-            {/* --- SIDEBAR (THE COLLECTION) --- */}
-            <div className="absolute right-4 top-4 z-20 flex flex-col gap-4">
+            {/* --- SIDEBAR (THE COLLECTION) - High Z-Index to stay on top --- */}
+            <div className="absolute right-4 top-16 z-50 flex flex-col gap-4 pointer-events-none">
                 {readingCards.map((card, i) => {
                     const isUnlocked = unlockedIndices.has(i);
                     const isCurrent = i === 0; 
@@ -98,18 +98,18 @@ const App: React.FC = () => {
                         <div 
                             key={i}
                             className={`
-                                w-12 h-16 rounded border flex items-center justify-center transition-all duration-500
+                                w-14 h-20 rounded-md border-2 flex items-center justify-center transition-all duration-500 shadow-xl backdrop-blur-md
                                 ${isUnlocked 
-                                    ? 'bg-midnight border-gold shadow-[0_0_10px_rgba(197,160,89,0.3)]' 
-                                    : 'bg-black/40 border-white/10 opacity-60'
+                                    ? 'bg-midnight/90 border-gold shadow-[0_0_15px_rgba(197,160,89,0.4)]' 
+                                    : 'bg-black/80 border-white/10 opacity-60 grayscale'
                                 }
-                                ${isCurrent ? 'scale-110 ring-2 ring-gold/50' : ''}
+                                ${isCurrent ? 'scale-110 ring-2 ring-gold/50 translate-x-[-4px]' : 'scale-90'}
                             `}
                         >
                             {isUnlocked ? (
-                                <div className="text-xl animate-[pop-in_0.5s]">{card.icon}</div>
+                                <div className="text-2xl animate-[pop-in_0.5s]">{card.icon}</div>
                             ) : (
-                                <div className="text-white/20 text-xs">🔒</div>
+                                <div className="text-white/20 text-sm">🔒</div>
                             )}
                         </div>
                     );
@@ -117,9 +117,9 @@ const App: React.FC = () => {
             </div>
 
             {/* Top Bar Area */}
-            <div className="pt-6 px-6 pr-20 mb-4 flex-none">
+            <div className="pt-6 px-6 pr-20 mb-4 flex-none relative z-40">
                 <div className="flex items-center gap-3 mb-2">
-                     <button onClick={handleReset} className="text-white/20 hover:text-white w-6 h-6 flex items-center justify-center rounded">
+                     <button onClick={handleReset} className="text-white/20 hover:text-white w-6 h-6 flex items-center justify-center rounded transition-colors">
                         ✕
                      </button>
                      <span className="text-xs uppercase tracking-[0.2em] text-gold/80">
@@ -137,7 +137,7 @@ const App: React.FC = () => {
             </div>
 
             {/* CARD STACK CONTAINER */}
-            <div className="flex-1 w-full relative px-4 pb-4 overflow-hidden">
+            <div className="flex-1 w-full relative px-4 pb-4 overflow-hidden z-10">
                 {/* 
                     We render the current card plus the next 2 cards.
                     We reverse them so the 'next' cards are rendered FIRST (at the bottom of DOM),
