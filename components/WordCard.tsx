@@ -89,12 +89,13 @@ const WordCard: React.FC<WordCardProps> = ({ data, onNext, onHard, stackIndex })
   const stackBrightness = stackIndex === 0 ? 1 : 0.5;
 
   // 2. Fly Styles (Action)
-  // Target: Top Right Sidebar (approx relative to center of screen)
-  // Moving X: +140px (Right), Y: -250px (Up towards sidebar)
+  // Target: BOTTOM Right Collection Pile
+  // Approx Coordinates: Translate X: +140px (Right), Y: +300px (Down)
+  // Rotation: Matches the pile's slight rotation
   const flyStyle = isFlying ? {
-      transform: 'translate(140px, -350px) rotate(10deg) scale(0.2)',
+      transform: 'translate(140px, 300px) rotate(15deg) scale(0.1)',
       opacity: 0,
-      transition: 'all 0.6s cubic-bezier(0.4, 0, 0.2, 1)' 
+      transition: 'all 0.6s cubic-bezier(0.55, 0.055, 0.675, 0.19)' // "In Back" ease - starts slow, accelerates in
   } : {};
 
   return (

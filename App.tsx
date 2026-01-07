@@ -89,7 +89,7 @@ const App: React.FC = () => {
       {appState === 'learning' && deck.length > 0 && currentActiveArcana && (
         <div className="w-full h-full flex flex-col relative animate-fade-in">
             
-            {/* --- SIDEBAR (THE COLLECTION) - High Z-Index to stay on top --- */}
+            {/* --- TOP RIGHT: TAROT SLOTS (Fate) --- */}
             <div className="absolute right-4 top-16 z-50 flex flex-col gap-4 pointer-events-none">
                 {readingCards.map((card, i) => {
                     const isUnlocked = unlockedIndices.has(i);
@@ -114,6 +114,21 @@ const App: React.FC = () => {
                         </div>
                     );
                 })}
+            </div>
+
+            {/* --- BOTTOM RIGHT: COLLECTION PILE (Memory) --- */}
+            {/* This acts as the visual target for the flying card animation */}
+            <div className="absolute right-6 bottom-10 z-0 pointer-events-none flex flex-col items-center">
+                 <div className="w-16 h-20 bg-midnight rounded-lg border border-gold/30 shadow-[0_0_20px_rgba(197,160,89,0.1)] flex items-center justify-center relative rotate-6">
+                    {/* Stack Effect */}
+                    <div className="absolute inset-0 bg-midnight border border-gold/20 rounded-lg -rotate-6 z-[-1]"></div>
+                    <div className="absolute inset-0 bg-midnight border border-gold/10 rounded-lg -rotate-12 z-[-2]"></div>
+                    
+                    <span className="text-gold/40 text-xs font-mystic tracking-widest">DECK</span>
+                    <div className="absolute -top-2 -right-2 w-6 h-6 bg-gold text-midnight rounded-full flex items-center justify-center font-bold text-xs shadow-glow">
+                        {currentIndex}
+                    </div>
+                 </div>
             </div>
 
             {/* Top Bar Area */}
