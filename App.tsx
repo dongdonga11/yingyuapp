@@ -117,9 +117,9 @@ const App: React.FC = () => {
             </div>
 
             {/* --- BOTTOM RIGHT: COLLECTION PILE (Memory) --- */}
-            {/* This acts as the visual target for the flying card animation */}
-            <div className="absolute right-6 bottom-10 z-0 pointer-events-none flex flex-col items-center">
-                 <div className="w-16 h-20 bg-midnight rounded-lg border border-gold/30 shadow-[0_0_20px_rgba(197,160,89,0.1)] flex items-center justify-center relative rotate-6">
+            {/* Z-Index increased to 50 to sit above the card stack */}
+            <div className="absolute right-6 bottom-10 z-50 pointer-events-none flex flex-col items-center">
+                 <div className="w-16 h-20 bg-midnight rounded-lg border border-gold/30 shadow-[0_0_20px_rgba(197,160,89,0.1)] flex items-center justify-center relative rotate-6 backdrop-blur-sm">
                     {/* Stack Effect */}
                     <div className="absolute inset-0 bg-midnight border border-gold/20 rounded-lg -rotate-6 z-[-1]"></div>
                     <div className="absolute inset-0 bg-midnight border border-gold/10 rounded-lg -rotate-12 z-[-2]"></div>
