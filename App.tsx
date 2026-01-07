@@ -1,112 +1,160 @@
 import React, { useState } from 'react';
 import Layout from './components/Layout';
 import WordCard from './components/WordCard';
-import TarotTable from './components/TarotTable'; // New Component
+import TarotTable from './components/TarotTable';
 import DailyProphecyCard from './components/DailyProphecy';
 import { initialVocabulary } from './data/vocabulary';
 import { getProphecy } from './data/tarot';
 import { WordData, TarotArcana, DailyProphecy } from './types';
 
-type AppState = 'altar' | 'learning' | 'prophecy';
+type AppState = 'altar' | 'prophecy_reveal' | 'learning';
 
 const App: React.FC = () => {
   const [appState, setAppState] = useState<AppState>('altar');
-  const [currentArcana, setCurrentArcana] = useState<TarotArcana | null>(null);
+  
+  // The Reading State
+  const [readingCards, setReadingCards] = useState<TarotArcana[]>([]);
+  const [unlockedIndices, setUnlockedIndices] = useState<Set<number>>(new Set([0])); // First card unlocked by default
   
   // Vocabulary State
   const [deck, setDeck] = useState<WordData[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   
-  // Prophecy State
+  // Prophecy State (The Active Overlay)
   const [prophecyData, setProphecyData] = useState<DailyProphecy | null>(null);
 
-  // 1. Handle Draw from the Table
-  const handleTarotDraw = (card: TarotArcana) => {
-      const filteredWords = card.filter_logic(initialVocabulary);
-      // Ensure we have at least some words, fallback to all if filter is too strict
-      const finalDeck = filteredWords.length > 0 ? filteredWords : initialVocabulary.slice(0, 3);
+  // 1. Handle Completion of 3-Card Draw
+  const handleReadingComplete = (cards: TarotArcana[]) => {
+      setReadingCards(cards);
       
-      setCurrentArcana(card);
+      // Filter logic: Combine filters from all cards (or just use the first for the main deck for now)
+      // Strategy: The deck is based on the *current active* card. 
+      // Initially, Card 0 is active.
+      const firstCard = cards[0];
+      const filteredWords = firstCard.filter_logic(initialVocabulary);
+      const finalDeck = filteredWords.length > 0 ? filteredWords : initialVocabulary.slice(0, 3);
       setDeck(finalDeck);
       setCurrentIndex(0);
+
+      // Generate Prophecy for the First Card immediately
+      const randomWord = finalDeck[Math.floor(Math.random() * finalDeck.length)];
+      const p = getProphecy(firstCard, randomWord);
+      setProphecyData(p);
       
-      // Short delay for the "Accept Fate" button animation
-      setTimeout(() => setAppState('learning'), 300);
+      // Move to Reveal Phase
+      setAppState('prophecy_reveal');
   };
 
-  // 2. Handle Progress
+  // 2. Handle Closing the Prophecy (Accepting Fate)
+  const handleAcceptProphecy = () => {
+      setProphecyData(null);
+      setAppState('learning');
+      // Here is where the "Animation to Sidebar" conceptually happens
+  };
+
+  // 3. Handle Word Progress
   const currentWord = deck[currentIndex];
+  // Calculate total progress including potential locked cards? 
+  // For now, let's keep it simple: Progress in current deck.
   const progress = Math.round(((currentIndex + 1) / deck.length) * 100);
 
-  const handleNext = async () => {
+  const handleNextWord = async () => {
      if (currentIndex < deck.length - 1) {
          setCurrentIndex(prev => prev + 1);
      } else {
-         // 3. Complete -> Generate Prophecy
-         if (currentArcana && deck.length > 0) {
-             const randomWordFromSession = deck[Math.floor(Math.random() * deck.length)];
-             const p = getProphecy(currentArcana, randomWordFromSession);
-             setProphecyData(p);
-             setAppState('prophecy');
-         }
+         // Deck Complete for this card? 
+         // In a full implementation, this would unlock the next Tarot Card in the readingCards array.
+         // For now, loop or just congratulate.
+         setCurrentIndex(0);
      }
   };
 
   // Reset Flow
   const handleReset = () => {
       setAppState('altar');
-      setCurrentArcana(null);
+      setReadingCards([]);
+      setUnlockedIndices(new Set([0]));
       setProphecyData(null);
   };
 
+  const currentActiveArcana = readingCards[0]; // Currently focused on the first one
+
   return (
-    <Layout themeColor={currentArcana?.theme_color}>
+    <Layout themeColor={currentActiveArcana?.theme_color}>
       
       {/* STATE: ALTAR (THE TABLE) */}
       {appState === 'altar' && (
-          <TarotTable onDraw={handleTarotDraw} />
+          <TarotTable onReadingComplete={handleReadingComplete} />
+      )}
+
+      {/* STATE: PROPHECY REVEAL (The Flashy Card) */}
+      {appState === 'prophecy_reveal' && prophecyData && (
+          <DailyProphecyCard 
+            data={prophecyData} 
+            onClose={handleAcceptProphecy} 
+          />
       )}
 
       {/* STATE: LEARNING */}
-      {appState === 'learning' && currentWord && currentArcana && (
-        <div className="w-full h-full flex flex-col px-4 pt-2 animate-fade-in">
-            {/* The Bond (Theme Header) */}
-            <div className="text-center mb-2">
-                <span className="text-[10px] uppercase tracking-[0.2em] opacity-60" style={{ color: currentArcana.theme_color }}>
-                    The Decree of {currentArcana.name}
-                </span>
+      {appState === 'learning' && currentWord && currentActiveArcana && (
+        <div className="w-full h-full flex flex-col relative animate-fade-in">
+            
+            {/* --- SIDEBAR (THE COLLECTION) --- */}
+            <div className="absolute right-4 top-4 z-20 flex flex-col gap-4">
+                {readingCards.map((card, i) => {
+                    const isUnlocked = unlockedIndices.has(i);
+                    const isCurrent = i === 0; // Simplified: 0 is always current for now
+                    return (
+                        <div 
+                            key={i}
+                            className={`
+                                w-12 h-16 rounded border flex items-center justify-center transition-all duration-500
+                                ${isUnlocked 
+                                    ? 'bg-midnight border-gold shadow-[0_0_10px_rgba(197,160,89,0.3)]' 
+                                    : 'bg-black/40 border-white/10 opacity-60'
+                                }
+                                ${isCurrent ? 'scale-110 ring-2 ring-gold/50' : ''}
+                            `}
+                        >
+                            {isUnlocked ? (
+                                <div className="text-xl animate-[pop-in_0.5s]">{card.icon}</div>
+                            ) : (
+                                <div className="text-white/20 text-xs">🔒</div>
+                            )}
+                        </div>
+                    );
+                })}
             </div>
 
-            {/* Progress/Nav */}
-            <div className="flex items-center gap-4 mb-2 px-2">
-                 <button onClick={handleReset} className="text-white/20 hover:text-white w-8 h-8 flex items-center justify-center rounded">
-                    ✕
-                 </button>
-                 <div className="flex-1 h-[2px] bg-white/10 rounded-full overflow-hidden">
+            {/* Top Bar Area (Offset for Sidebar) */}
+            <div className="pt-6 px-6 pr-20 mb-4">
+                <div className="flex items-center gap-3 mb-2">
+                     <button onClick={handleReset} className="text-white/20 hover:text-white w-6 h-6 flex items-center justify-center rounded">
+                        ✕
+                     </button>
+                     <span className="text-xs uppercase tracking-[0.2em] text-gold/80">
+                        {currentActiveArcana.name_cn}
+                     </span>
+                </div>
+                
+                {/* Progress Bar */}
+                <div className="h-[2px] bg-white/10 rounded-full overflow-hidden w-full max-w-[200px]">
                     <div 
                         className="h-full transition-all duration-500 shadow-[0_0_10px_currentColor]" 
-                        style={{ width: `${progress}%`, backgroundColor: currentArcana.theme_color, color: currentArcana.theme_color }}
+                        style={{ width: `${progress}%`, backgroundColor: currentActiveArcana.theme_color }}
                     ></div>
                  </div>
-                 <span className="font-mono text-[10px] opacity-40" style={{ color: currentArcana.theme_color }}>
-                    {currentIndex + 1} / {deck.length}
-                 </span>
             </div>
 
-            <WordCard 
-                data={currentWord} 
-                onNext={handleNext}
-                onHard={handleNext}
-            />
+            {/* Word Card Area */}
+            <div className="flex-1 px-4 pb-4">
+                <WordCard 
+                    data={currentWord} 
+                    onNext={handleNextWord}
+                    onHard={handleNextWord}
+                />
+            </div>
         </div>
-      )}
-
-      {/* STATE: PROPHECY */}
-      {appState === 'prophecy' && prophecyData && (
-          <DailyProphecyCard 
-            data={prophecyData} 
-            onClose={handleReset} 
-          />
       )}
 
     </Layout>

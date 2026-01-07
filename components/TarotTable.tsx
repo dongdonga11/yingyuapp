@@ -3,27 +3,30 @@ import { TAROT_DECK } from '../data/tarot';
 import { TarotArcana } from '../types';
 
 interface TarotTableProps {
-    onDraw: (card: TarotArcana) => void;
+    onReadingComplete: (cards: TarotArcana[]) => void;
 }
 
-type Phase = 'shuffle' | 'spread' | 'reveal';
+type Phase = 'shuffle' | 'spread' | 'completing';
 
-const TarotTable: React.FC<TarotTableProps> = ({ onDraw }) => {
+const TarotTable: React.FC<TarotTableProps> = ({ onReadingComplete }) => {
     const [phase, setPhase] = useState<Phase>('shuffle');
     const [deck, setDeck] = useState<TarotArcana[]>([]);
     const [activeIndex, setActiveIndex] = useState(0);
     const [isShuffling, setIsShuffling] = useState(false);
     
+    // Selection State
+    const [selectedCards, setSelectedCards] = useState<TarotArcana[]>([]);
+    const [hiddenIndices, setHiddenIndices] = useState<Set<number>>(new Set());
+
     // Touch handling state
     const touchStartX = useRef<number | null>(null);
     const containerRef = useRef<HTMLDivElement>(null);
 
-    // Initialize deck - We need a substantial deck to form the "piles"
+    // Initialize deck
     useEffect(() => {
-        // 4x Deck to create a really thick pile feel (approx 80 cards)
+        // 4x Deck for thickness
         const fullDeck = [...TAROT_DECK, ...TAROT_DECK, ...TAROT_DECK, ...TAROT_DECK];
         setDeck(fullDeck.sort(() => Math.random() - 0.5));
-        // Start a bit in so we have a small left pile and huge right pile
         setActiveIndex(5);
     }, []);
 
@@ -44,8 +47,17 @@ const TarotTable: React.FC<TarotTableProps> = ({ onDraw }) => {
         
         if (Math.abs(delta) > 5) {
             const direction = delta > 0 ? 1 : -1;
-            const newIndex = Math.min(Math.max(0, activeIndex + direction), deck.length - 1);
-            setActiveIndex(newIndex);
+            let newIndex = activeIndex + direction;
+            
+            // Skip hidden cards (cards already selected)
+            while (hiddenIndices.has(newIndex) && newIndex >= 0 && newIndex < deck.length) {
+                newIndex += direction;
+            }
+
+            newIndex = Math.min(Math.max(0, newIndex), deck.length - 1);
+            if (!hiddenIndices.has(newIndex)) {
+                setActiveIndex(newIndex);
+            }
         }
     };
 
@@ -61,9 +73,18 @@ const TarotTable: React.FC<TarotTableProps> = ({ onDraw }) => {
 
         if (Math.abs(diff) > 20) {
             const direction = diff > 0 ? 1 : -1;
-            const newIndex = Math.min(Math.max(0, activeIndex + direction), deck.length - 1);
-            setActiveIndex(newIndex);
-            touchStartX.current = currentX; 
+            let newIndex = activeIndex + direction;
+
+            // Skip hidden cards
+            while (hiddenIndices.has(newIndex) && newIndex >= 0 && newIndex < deck.length) {
+                newIndex += direction;
+            }
+
+            newIndex = Math.min(Math.max(0, newIndex), deck.length - 1);
+             if (!hiddenIndices.has(newIndex)) {
+                setActiveIndex(newIndex);
+                touchStartX.current = currentX; 
+            }
         }
     };
 
@@ -71,20 +92,54 @@ const TarotTable: React.FC<TarotTableProps> = ({ onDraw }) => {
         touchStartX.current = null;
     };
 
+    // --- SELECTION LOGIC ---
     const handleCardClick = (index: number) => {
+        if (phase !== 'spread') return;
+        
         if (index === activeIndex) {
-            setPhase('reveal');
+            // Select the card
+            if (selectedCards.length < 3) {
+                const card = deck[index];
+                const newSelected = [...selectedCards, card];
+                setSelectedCards(newSelected);
+                
+                // Hide from deck visually
+                setHiddenIndices(prev => new Set(prev).add(index));
+
+                // Find next available active index
+                let nextIndex = index + 1;
+                if (nextIndex >= deck.length) nextIndex = index - 1;
+                while (hiddenIndices.has(nextIndex) || nextIndex === index) {
+                    nextIndex++;
+                    if (nextIndex >= deck.length) {
+                        nextIndex = 0; // Wrap or break
+                        break; 
+                    }
+                }
+                setActiveIndex(nextIndex);
+
+                // Check completion
+                if (newSelected.length === 3) {
+                    setPhase('completing');
+                    setTimeout(() => {
+                        onReadingComplete(newSelected);
+                    }, 1000);
+                }
+            }
         } else {
             setActiveIndex(index);
         }
     };
 
-    const handleAcceptFate = () => {
-        onDraw(deck[activeIndex]);
-    };
-
     // --- THE HAND FAN LOGIC ---
     const getCardStyle = (index: number) => {
+        // If card is selected (hidden from fan), we don't render it in the fan
+        if (hiddenIndices.has(index)) {
+             return { display: 'none' };
+        }
+
+        const zIndex = index;
+
         // SHUFFLE ANIMATION
         if (phase === 'shuffle') {
             const randomRot = Math.random() * 6 - 3;
@@ -93,28 +148,23 @@ const TarotTable: React.FC<TarotTableProps> = ({ onDraw }) => {
             return {
                 transform: `translate(${randomX}px, ${randomY}px) rotate(${randomRot}deg)`,
                 opacity: 1,
-                zIndex: index,
+                zIndex,
                 transition: 'transform 0.1s',
                 transformOrigin: 'center center'
             };
         }
 
         // SPREAD (FAN) ANIMATION
-        if (phase === 'spread') {
+        if (phase === 'spread' || phase === 'completing') {
             const offset = index - activeIndex;
             const absOffset = Math.abs(offset);
             
-            // CONFIGURATION
+            // Standard Fan Config
             const VISIBLE_RADIUS = 6; 
-            const MAX_ROTATION = 75; // Even steeper pile angle
-            
-            // Transition
-            const transition = 'all 0.4s cubic-bezier(0.16, 1, 0.3, 1)'; // Snappy spring
+            const MAX_ROTATION = 75; 
+            const transition = 'all 0.4s cubic-bezier(0.16, 1, 0.3, 1)';
 
-            // FIXED Z-INDEX: Follows natural deck order
-            const zIndex = index;
-
-            // 1. RIGHT STACK (The remaining deck)
+            // 1. RIGHT STACK
             if (offset > VISIBLE_RADIUS) {
                 const stackDepth = offset - VISIBLE_RADIUS; 
                 const visualStackOffset = Math.min(stackDepth, 8); 
@@ -131,7 +181,7 @@ const TarotTable: React.FC<TarotTableProps> = ({ onDraw }) => {
                 };
             }
 
-            // 2. LEFT STACK (The discarded pile)
+            // 2. LEFT STACK
             if (offset < -VISIBLE_RADIUS) {
                 const stackDepth = Math.abs(offset) - VISIBLE_RADIUS;
                 const visualStackOffset = Math.min(stackDepth, 8);
@@ -149,65 +199,37 @@ const TarotTable: React.FC<TarotTableProps> = ({ onDraw }) => {
             }
 
             // 3. THE ACTIVE FAN
-            // Non-linear rotation
             const sign = offset > 0 ? 1 : -1;
             const rotate = sign * Math.pow(absOffset, 1.2) * 6; 
-            
-            // Tighter X spacing
             const xTranslate = offset * 18; 
-            
-            // Y & Scale Logic
             let yTranslate = 0;
             let scale = 0.95;
 
             if (index === activeIndex) {
-                // "往上顶一下" - Push up significantly
                 yTranslate = -70; 
-                // "这个角更大一些" - Scale up the active card
                 scale = 1.15;
             } else {
-                // Neighbors sink down
                 yTranslate = 20; 
             }
 
+            // If we are completing, fade out the remaining deck
+            const opacity = phase === 'completing' ? 0 : 1;
+            const finalScale = phase === 'completing' ? 0.8 : scale;
+
             return {
-                transform: `translateX(${xTranslate}px) translateY(${yTranslate}px) rotate(${rotate}deg) scale(${scale})`,
-                zIndex, // Fixed Z-Index here as well
-                opacity: 1,
-                transition,
+                transform: `translateX(${xTranslate}px) translateY(${yTranslate}px) rotate(${rotate}deg) scale(${finalScale})`,
+                zIndex, 
+                opacity,
+                transition: 'all 0.6s ease-out',
                 transformOrigin: '50% 120%' 
             };
-        }
-        
-        // REVEAL ANIMATION
-        if (phase === 'reveal') {
-            if (index === activeIndex) {
-                 return {
-                    transform: `translate(0, -100px) scale(1.2) rotateY(180deg)`,
-                    zIndex: 3000, // Still needs to be on top during the flip reveal
-                    opacity: 1,
-                    transition: 'all 0.8s cubic-bezier(0.34, 1.56, 0.64, 1)',
-                    transformOrigin: 'center center' // Reset pivot for flip
-                };
-            } else {
-                // Others scatter away
-                const scatterDir = index < activeIndex ? -1 : 1;
-                 return {
-                    transform: `translate(${ scatterDir * 500 }px, 500px) rotate(${ scatterDir * 90 }deg)`,
-                    opacity: 0,
-                    transition: 'all 0.5s ease-in',
-                    transformOrigin: 'center center'
-                };
-            }
         }
         return {};
     };
 
-    const activeCard = deck[activeIndex];
-
     return (
         <div 
-            className="w-full h-full flex flex-col items-center justify-center relative overflow-hidden bg-midnight select-none"
+            className="w-full h-full flex flex-col items-center relative overflow-hidden bg-midnight select-none"
             ref={containerRef}
             onWheel={handleWheel}
             onTouchStart={handleTouchStart}
@@ -215,6 +237,36 @@ const TarotTable: React.FC<TarotTableProps> = ({ onDraw }) => {
             onTouchEnd={handleTouchEnd}
         >
             
+            {/* --- TOP SLOTS (THE ALTAR) --- */}
+            <div className="absolute top-8 left-0 right-0 z-20 flex justify-center gap-4 transition-all duration-500">
+                {[0, 1, 2].map((slotIndex) => {
+                    const card = selectedCards[slotIndex];
+                    return (
+                        <div 
+                            key={slotIndex}
+                            className={`
+                                w-20 h-32 rounded border-2 flex items-center justify-center transition-all duration-500
+                                ${card 
+                                    ? 'border-gold bg-midnight shadow-[0_0_15px_rgba(197,160,89,0.5)] scale-100' 
+                                    : 'border-white/10 bg-white/5 scale-95'
+                                }
+                            `}
+                        >
+                            {card ? (
+                                <div className="text-center animate-[pop-in_0.3s_ease-out]">
+                                    <div className="text-2xl mb-1">{card.icon}</div>
+                                    <div className="text-[8px] uppercase tracking-widest text-gold">{card.name_cn}</div>
+                                </div>
+                            ) : (
+                                <div className="text-white/10 text-xl">
+                                    {slotIndex === 0 ? 'Ⅰ' : slotIndex === 1 ? 'Ⅱ' : 'Ⅲ'}
+                                </div>
+                            )}
+                        </div>
+                    );
+                })}
+            </div>
+
             {/* --- PHASE 1: SHUFFLE UI --- */}
             {phase === 'shuffle' && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center z-50 pointer-events-none">
@@ -236,22 +288,21 @@ const TarotTable: React.FC<TarotTableProps> = ({ onDraw }) => {
                 </div>
             )}
 
-            {/* --- PHASE 2: SPREAD HEADER --- */}
+            {/* --- PHASE 2: INSTRUCTIONS --- */}
             {phase === 'spread' && (
-                <div className="absolute top-16 text-center z-10 animate-fade-in pointer-events-none">
-                    <h2 className="text-gold font-mystic text-xl tracking-widest mb-1 text-glow">Destiny Awaits</h2>
-                    <p className="text-white/30 font-serif text-xs italic">
-                        {deck.length - activeIndex} cards remaining
-                    </p>
+                <div className="absolute top-44 text-center z-10 animate-fade-in pointer-events-none">
+                    <h2 className="text-gold font-mystic text-sm tracking-widest mb-1 text-glow">
+                        Select {3 - selectedCards.length} Cards
+                    </h2>
                 </div>
             )}
 
             {/* --- CARD CONTAINER --- */}
-            <div className="relative w-full h-[600px] flex items-center justify-center perspective-1000 translate-y-28">
+            <div className="flex-1 w-full relative flex items-center justify-center perspective-1000 translate-y-16">
                 {deck.map((card, i) => (
                     <div
                         key={i}
-                        onClick={() => phase === 'spread' && handleCardClick(i)}
+                        onClick={() => handleCardClick(i)}
                         style={getCardStyle(i)}
                         className={`
                             absolute w-44 h-80 rounded-lg border border-gold/40 shadow-[-5px_0_10px_rgba(0,0,0,0.5)] cursor-pointer preserve-3d
@@ -281,58 +332,13 @@ const TarotTable: React.FC<TarotTableProps> = ({ onDraw }) => {
                             style={{ borderColor: card.theme_color }}
                         >
                             <div className="flex-1 flex flex-col justify-center w-full relative">
-                                <div className="absolute top-2 left-2 text-xs opacity-50 font-mystic" style={{ color: card.theme_color }}>
-                                    {['0', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'][i % 11] || '∞'}
-                                </div>
-                                <div className="absolute top-2 right-2 text-xs opacity-30">✦</div>
-                                
-                                <div className="text-7xl mb-6 animate-float filter drop-shadow-[0_0_10px_rgba(255,255,255,0.2)]">{card.icon}</div>
-                                
+                                <div className="text-7xl mb-6">{card.icon}</div>
                                 <h3 className="font-mystic text-xl text-white uppercase tracking-widest mb-2">{card.name}</h3>
-                                <div className="w-6 h-[1px] bg-white/20 mx-auto my-2"></div>
-                                <div className="text-xs font-serif italic opacity-70" style={{ color: card.theme_color }}>{card.name_cn}</div>
                             </div>
                         </div>
                     </div>
                 ))}
             </div>
-
-            {/* --- PHASE 3: REVEAL DETAILS --- */}
-            {phase === 'reveal' && activeCard && (
-                <div className="absolute bottom-0 left-0 right-0 p-8 bg-gradient-to-t from-midnight via-midnight/98 to-transparent z-40 flex flex-col items-center animate-slide-up pb-12">
-                    
-                    {/* Fortune Text */}
-                    <div className="text-center mb-8 max-w-xs">
-                        <p className="font-serif italic text-parchment text-sm leading-loose tracking-wide">
-                            "{activeCard.fortune_text}"
-                        </p>
-                    </div>
-
-                    {/* Stats Grid */}
-                    <div className="grid grid-cols-3 gap-6 w-full max-w-xs mb-8 border-t border-b border-white/10 py-6">
-                        <div className="flex flex-col items-center gap-2">
-                            <span className="text-[10px] uppercase tracking-widest text-white/40">Memory</span>
-                            <div className="flex text-[10px] text-gold gap-0.5">{'★'.repeat(activeCard.stats.memory)}</div>
-                        </div>
-                        <div className="flex flex-col items-center gap-2 border-l border-r border-white/10 px-4">
-                            <span className="text-[10px] uppercase tracking-widest text-white/40">Focus</span>
-                            <div className="flex text-[10px] text-red-400 gap-0.5">{'★'.repeat(activeCard.stats.focus)}</div>
-                        </div>
-                        <div className="flex flex-col items-center gap-2">
-                            <span className="text-[10px] uppercase tracking-widest text-white/40">Insight</span>
-                            <div className="flex text-[10px] text-blue-400 gap-0.5">{'★'.repeat(activeCard.stats.insight)}</div>
-                        </div>
-                    </div>
-
-                    <button 
-                        onClick={handleAcceptFate}
-                        className="w-full max-w-xs h-14 bg-gold text-midnight font-bold font-mystic text-lg uppercase tracking-[0.2em] rounded-sm shadow-[0_0_30px_rgba(197,160,89,0.3)] hover:bg-[#D4AF6A] hover:scale-[1.02] transition-all flex items-center justify-center gap-3 group"
-                    >
-                        <span>Accept Task</span>
-                        <span className="group-hover:translate-x-1 transition-transform">➔</span>
-                    </button>
-                </div>
-            )}
         </div>
     );
 };
