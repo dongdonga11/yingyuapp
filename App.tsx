@@ -26,50 +26,36 @@ const App: React.FC = () => {
   // 1. Handle Completion of 3-Card Draw
   const handleReadingComplete = (cards: TarotArcana[]) => {
       setReadingCards(cards);
-      
-      // Filter logic: Combine filters from all cards (or just use the first for the main deck for now)
-      // Strategy: The deck is based on the *current active* card. 
-      // Initially, Card 0 is active.
       const firstCard = cards[0];
       const filteredWords = firstCard.filter_logic(initialVocabulary);
       const finalDeck = filteredWords.length > 0 ? filteredWords : initialVocabulary.slice(0, 3);
       setDeck(finalDeck);
       setCurrentIndex(0);
 
-      // Generate Prophecy for the First Card immediately
       const randomWord = finalDeck[Math.floor(Math.random() * finalDeck.length)];
       const p = getProphecy(firstCard, randomWord);
       setProphecyData(p);
-      
-      // Move to Reveal Phase
       setAppState('prophecy_reveal');
   };
 
-  // 2. Handle Closing the Prophecy (Accepting Fate)
+  // 2. Handle Closing the Prophecy
   const handleAcceptProphecy = () => {
       setProphecyData(null);
       setAppState('learning');
-      // Here is where the "Animation to Sidebar" conceptually happens
   };
 
   // 3. Handle Word Progress
   const currentWord = deck[currentIndex];
-  // Calculate total progress including potential locked cards? 
-  // For now, let's keep it simple: Progress in current deck.
-  const progress = Math.round(((currentIndex + 1) / deck.length) * 100);
+  const progress = Math.round(((currentIndex) / deck.length) * 100);
 
   const handleNextWord = async () => {
      if (currentIndex < deck.length - 1) {
          setCurrentIndex(prev => prev + 1);
      } else {
-         // Deck Complete for this card? 
-         // In a full implementation, this would unlock the next Tarot Card in the readingCards array.
-         // For now, loop or just congratulate.
-         setCurrentIndex(0);
+         setCurrentIndex(0); // Loop for demo
      }
   };
 
-  // Reset Flow
   const handleReset = () => {
       setAppState('altar');
       setReadingCards([]);
@@ -77,17 +63,17 @@ const App: React.FC = () => {
       setProphecyData(null);
   };
 
-  const currentActiveArcana = readingCards[0]; // Currently focused on the first one
+  const currentActiveArcana = readingCards[0];
 
   return (
     <Layout themeColor={currentActiveArcana?.theme_color}>
       
-      {/* STATE: ALTAR (THE TABLE) */}
+      {/* STATE: ALTAR */}
       {appState === 'altar' && (
           <TarotTable onReadingComplete={handleReadingComplete} />
       )}
 
-      {/* STATE: PROPHECY REVEAL (The Flashy Card) */}
+      {/* STATE: PROPHECY */}
       {appState === 'prophecy_reveal' && prophecyData && (
           <DailyProphecyCard 
             data={prophecyData} 
@@ -97,43 +83,57 @@ const App: React.FC = () => {
 
       {/* STATE: LEARNING */}
       {appState === 'learning' && currentWord && currentActiveArcana && (
-        <div className="w-full h-full flex flex-col relative animate-fade-in">
+        <div className="w-full h-full flex flex-col relative animate-fade-in overflow-hidden">
             
+            {/* --- VISUAL SLOTS (Animation Targets) --- */}
+            {/* Left Slot: Abyss */}
+            <div className="absolute left-0 top-1/2 -translate-y-1/2 w-12 h-64 rounded-r-2xl bg-gradient-to-l from-transparent to-[#8A2323]/20 border-r border-[#8A2323]/30 flex flex-col items-center justify-center gap-4 z-0 opacity-50">
+                <div className="text-[#8A2323] text-opacity-50 text-2xl animate-pulse">☠</div>
+                <div className="text-[#8A2323] text-[10px] tracking-widest -rotate-90 whitespace-nowrap opacity-60">ABYSS</div>
+            </div>
+
+            {/* Right Slot: Sanctum */}
+            <div className="absolute right-0 top-1/2 -translate-y-1/2 w-12 h-64 rounded-l-2xl bg-gradient-to-r from-transparent to-gold/20 border-l border-gold/30 flex flex-col items-center justify-center gap-4 z-0 opacity-50">
+                 <div className="text-gold text-opacity-50 text-2xl animate-pulse">☀</div>
+                 <div className="text-gold text-[10px] tracking-widest rotate-90 whitespace-nowrap opacity-60">SANCTUM</div>
+            </div>
+
+
             {/* --- SIDEBAR (THE COLLECTION) --- */}
             <div className="absolute right-4 top-4 z-20 flex flex-col gap-4">
                 {readingCards.map((card, i) => {
                     const isUnlocked = unlockedIndices.has(i);
-                    const isCurrent = i === 0; // Simplified: 0 is always current for now
+                    const isCurrent = i === 0;
                     return (
                         <div 
                             key={i}
                             className={`
-                                w-12 h-16 rounded border flex items-center justify-center transition-all duration-500
+                                w-10 h-14 rounded border flex items-center justify-center transition-all duration-500
                                 ${isUnlocked 
                                     ? 'bg-midnight border-gold shadow-[0_0_10px_rgba(197,160,89,0.3)]' 
                                     : 'bg-black/40 border-white/10 opacity-60'
                                 }
-                                ${isCurrent ? 'scale-110 ring-2 ring-gold/50' : ''}
+                                ${isCurrent ? 'scale-110 ring-1 ring-gold/50' : ''}
                             `}
                         >
                             {isUnlocked ? (
-                                <div className="text-xl animate-[pop-in_0.5s]">{card.icon}</div>
+                                <div className="text-lg animate-[pop-in_0.5s]">{card.icon}</div>
                             ) : (
-                                <div className="text-white/20 text-xs">🔒</div>
+                                <div className="text-white/20 text-[10px]">🔒</div>
                             )}
                         </div>
                     );
                 })}
             </div>
 
-            {/* Top Bar Area (Offset for Sidebar) */}
-            <div className="pt-6 px-6 pr-20 mb-4">
+            {/* Top Bar Area */}
+            <div className="pt-6 px-6 pr-16 mb-2 relative z-10">
                 <div className="flex items-center gap-3 mb-2">
                      <button onClick={handleReset} className="text-white/20 hover:text-white w-6 h-6 flex items-center justify-center rounded">
                         ✕
                      </button>
                      <span className="text-xs uppercase tracking-[0.2em] text-gold/80">
-                        {currentActiveArcana.name_cn}
+                        {currentActiveArcana.name_cn} Phase
                      </span>
                 </div>
                 
@@ -147,11 +147,11 @@ const App: React.FC = () => {
             </div>
 
             {/* Word Card Area */}
-            <div className="flex-1 px-4 pb-4">
+            <div className="flex-1 px-4 pb-4 flex items-center justify-center z-10">
                 <WordCard 
                     data={currentWord} 
-                    onNext={handleNextWord}
-                    onHard={handleNextWord}
+                    onNext={handleNextWord} // Mastered (Fly Right)
+                    onHard={handleNextWord} // Forget (Fly Left) - Logic is same for now, just animation differs
                 />
             </div>
         </div>
