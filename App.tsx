@@ -3,6 +3,7 @@ import Layout from './components/Layout';
 import WordCard from './components/WordCard';
 import TarotTable from './components/TarotTable';
 import DailyProphecyCard from './components/DailyProphecy';
+import ShareCard from './components/ShareCard';
 import { initialVocabulary } from './data/vocabulary';
 import { getProphecy } from './data/tarot';
 import { getOracleReading } from './services/geminiService';
@@ -36,6 +37,9 @@ const App: React.FC = () => {
   // 3: Card 3 (Revelation) Revealed
   // 4: Synthesis (All Cards + Summary)
   const [revealStep, setRevealStep] = useState<number>(0);
+
+  // NEW: Share State
+  const [showShareCard, setShowShareCard] = useState(false);
 
   // 1. Handle Completion of 3-Card Draw
   const handleReadingComplete = (cards: TarotArcana[]) => {
@@ -152,6 +156,7 @@ const App: React.FC = () => {
       setOracleTopic(null);
       setOracleResult(null);
       setRevealStep(0);
+      setShowShareCard(false);
   };
 
   const currentActiveArcana = readingCards[0]; 
@@ -334,7 +339,6 @@ const App: React.FC = () => {
               <div className="flex-1 flex flex-col items-center relative z-10 px-6 pb-6">
                   
                   {/* --- TOP: CARD DISPLAY AREA --- */}
-                  {/* Fixed height container for cards to ensure they don't jump around */}
                   <div className="h-[220px] w-full flex items-center justify-center mb-4 perspective-1000">
                      {/* Show Cards Only if Topic Selected */}
                      {oracleTopic && (
@@ -347,7 +351,6 @@ const App: React.FC = () => {
                                       className={`w-28 h-44 rounded-lg relative preserve-3d transition-all duration-700 ease-out`}
                                       style={{
                                           ...style,
-                                          // Override transform if needed, but style object handles scale/translate
                                           transformStyle: 'preserve-3d',
                                           transform: `${style.isFlipped ? 'rotateY(0)' : 'rotateY(180deg)'} ${style.transform}`
                                       }}
@@ -411,7 +414,7 @@ const App: React.FC = () => {
                       {oracleResult && (
                           <div className="w-full h-full flex flex-col">
                               
-                              {/* Content Container with Transition */}
+                              {/* Content Container */}
                               <div className="flex-1 flex flex-col justify-center items-center text-center">
                                   
                                   {/* STEP 1: STATUS */}
@@ -462,7 +465,7 @@ const App: React.FC = () => {
 
                               </div>
 
-                              {/* NEXT BUTTON */}
+                              {/* NEXT / CRYSTALLIZE BUTTON */}
                               <div className="mt-6 flex justify-center w-full">
                                   {revealStep < 4 ? (
                                       <button 
@@ -472,11 +475,12 @@ const App: React.FC = () => {
                                           {revealStep === 0 ? "Reveal First Card" : revealStep === 3 ? "Show Conclusion" : "Reveal Next"}
                                       </button>
                                   ) : (
+                                      // THE CRYSTALLIZE BUTTON
                                       <button 
-                                        onClick={handleReset} 
-                                        className="w-full py-3 text-xs text-purple-500/50 hover:text-purple-300 tracking-widest uppercase transition-colors"
+                                        onClick={() => setShowShareCard(true)}
+                                        className="w-full py-4 bg-gold text-midnight font-mystic text-sm uppercase tracking-[0.2em] rounded shadow-[0_0_30px_rgba(197,160,89,0.5)] hover:bg-white transition-all hover:scale-105 active:scale-95"
                                       >
-                                          Close Circle
+                                          ✧ Crystallize Fate ✧
                                       </button>
                                   )}
                               </div>
@@ -488,6 +492,16 @@ const App: React.FC = () => {
 
               </div>
           </div>
+      )}
+      
+      {/* STATE: SHARE CARD OVERLAY */}
+      {showShareCard && oracleResult && (
+          <ShareCard 
+            readingCards={readingCards}
+            oracleResult={oracleResult}
+            wordCount={deck.length}
+            onClose={() => setShowShareCard(false)}
+          />
       )}
 
     </Layout>
