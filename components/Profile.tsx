@@ -14,7 +14,7 @@ const Profile: React.FC<ProfileProps> = ({ currentBook, collectedCards, onChange
     const daysStreak = 5;
 
     return (
-        <div className="w-full h-full flex flex-col p-6 animate-fade-in overflow-y-auto pb-32 custom-scrollbar">
+        <div className="w-full h-full flex flex-col p-6 animate-fade-in overflow-y-auto pb-20 custom-scrollbar">
             
             {/* HEADER */}
             <div className="flex flex-col items-center mb-8">

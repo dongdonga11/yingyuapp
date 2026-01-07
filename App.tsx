@@ -244,7 +244,7 @@ const App: React.FC = () => {
       // 1. Initial State: The Altar (Shuffle & Draw)
       if (appState === 'altar' || appState === 'library') {
           return (
-            <div className="relative w-full h-full flex flex-col pb-24">
+            <div className="relative w-full h-full flex flex-col pb-20">
                 {selectedBook && (
                   <div className="absolute top-4 left-4 z-50 text-white/20 text-xs flex items-center gap-2">
                       <span>{selectedBook.icon}</span>
@@ -279,7 +279,7 @@ const App: React.FC = () => {
                 </div>
 
                 {/* Deck Counter */}
-                <div className="absolute right-6 bottom-32 z-50 pointer-events-none flex flex-col items-center">
+                <div className="absolute right-6 bottom-24 z-50 pointer-events-none flex flex-col items-center">
                     <div className="bg-midnight/80 px-2 py-1 rounded text-xs text-gold font-bold">
                         {currentIndex + 1} / {deck.length}
                     </div>
@@ -297,7 +297,7 @@ const App: React.FC = () => {
                 </div>
 
                 {/* Cards */}
-                <div className="flex-1 w-full relative px-4 pb-28 overflow-hidden z-10">
+                <div className="flex-1 w-full relative px-4 pb-20 overflow-hidden z-10">
                     {deck.slice(currentIndex, currentIndex + 3).map((wordData, i) => (
                         <WordCard 
                             key={wordData.id} 
@@ -315,7 +315,7 @@ const App: React.FC = () => {
       // 4. Oracle Ready (Mission Complete)
       if (appState === 'oracle_ready') {
          return (
-          <div className="absolute inset-0 z-[50] bg-midnight/90 backdrop-blur-lg flex flex-col items-center justify-center animate-fade-in pb-24">
+          <div className="absolute inset-0 z-[50] bg-midnight/90 backdrop-blur-lg flex flex-col items-center justify-center animate-fade-in pb-20">
               <div className="absolute inset-0 bg-gold/5 animate-pulse"></div>
               
               <div className="relative flex flex-col items-center text-center p-8">
@@ -341,7 +341,7 @@ const App: React.FC = () => {
       // 5. The Sanctuary (Reading Result)
       if (appState === 'oracle_reading') {
          return (
-            <div className="absolute inset-0 z-[50] bg-[#1a1025] flex flex-col overflow-hidden animate-fade-in pb-24">
+            <div className="absolute inset-0 z-[50] bg-[#1a1025] flex flex-col overflow-hidden animate-fade-in pb-20">
               <div className="absolute inset-0 opacity-30 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] animate-[pulse_5s_infinite]"></div>
               
               <div className="flex-none flex justify-between items-center p-6 z-10">
