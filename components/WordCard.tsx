@@ -89,13 +89,21 @@ const WordCard: React.FC<WordCardProps> = ({ data, onNext, onHard, stackIndex })
   const stackBrightness = stackIndex === 0 ? 1 : 0.5;
 
   // 2. Fly Styles (Action)
-  // Target: BOTTOM Right Collection Pile
-  // Approx Coordinates: Translate X: +140px (Right), Y: +300px (Down)
-  // Rotation: Matches the pile's slight rotation
+  // Logic: 
+  // If it's a HIDDEN TAROT card, it flies UP to the Top Right (Slots).
+  // If it's a NORMAL WORD, it flies DOWN to the Bottom Right (Pile).
+  
+  const isTarot = !!data.hiddenTarot;
+  
+  // Coordinates for Top Right (Slots) vs Bottom Right (Pile) relative to center
+  const targetX = 140; 
+  const targetY = isTarot ? -300 : 300; // Negative goes up, Positive goes down
+  const targetScale = isTarot ? 0.2 : 0.1;
+
   const flyStyle = isFlying ? {
-      transform: 'translate(140px, 300px) rotate(15deg) scale(0.1)',
+      transform: `translate(${targetX}px, ${targetY}px) rotate(15deg) scale(${targetScale})`,
       opacity: 0,
-      transition: 'all 0.6s cubic-bezier(0.55, 0.055, 0.675, 0.19)' // "In Back" ease - starts slow, accelerates in
+      transition: 'all 0.6s cubic-bezier(0.55, 0.055, 0.675, 0.19)' // "In Back" ease
   } : {};
 
   return (
@@ -106,8 +114,6 @@ const WordCard: React.FC<WordCardProps> = ({ data, onNext, onHard, stackIndex })
             transform: `translateY(${stackTranslateY}px) scale(${stackScale})`,
             opacity: stackOpacity,
             filter: `brightness(${stackBrightness})`,
-            // IMPORTANT: The container allows pointer events if active, 
-            // but we fine-tune inner elements to avoid blocking.
             pointerEvents: isActive ? 'none' : 'none', 
         }}
     >
@@ -127,11 +133,10 @@ const WordCard: React.FC<WordCardProps> = ({ data, onNext, onHard, stackIndex })
             >
                 
                 {/* ============================================================
-                    SIDE A: THE RITUAL (正面)
+                    SIDE A: THE RITUAL (正面 - Always Word Puzzle)
                    ============================================================ */}
                 <div 
                     className="absolute inset-0 backface-hidden bg-obsidian rounded-xl shadow-glow overflow-hidden text-parchment"
-                    // CRITICAL FIX: Disable pointer events on Side A when flipped so it doesn't block Side B buttons
                     style={{ pointerEvents: isFlipped ? 'none' : 'auto' }}
                 >
                     {/* Frame */}
@@ -141,14 +146,12 @@ const WordCard: React.FC<WordCardProps> = ({ data, onNext, onHard, stackIndex })
                     {/* Content */}
                     <div className="w-full h-full flex flex-col items-center p-6 relative z-10">
                         
-                        {/* Header */}
                         <div className="flex flex-col items-center mb-6 w-full">
                             <h3 className="font-mystic text-gold text-sm tracking-[0.3em] uppercase border-b border-gold/30 pb-1 mb-1">
                                 {data.root_family.toUpperCase()} ARCANA
                             </h3>
                         </div>
 
-                        {/* Visualization */}
                         <div className="relative flex flex-col items-center justify-center mb-8 w-full">
                              <div className="absolute w-24 h-24 rounded-full border border-gold/10 animate-[spin_10s_linear_infinite]"></div>
                              <div className="absolute w-20 h-20 rounded-full border border-gold/20"></div>
@@ -157,12 +160,8 @@ const WordCard: React.FC<WordCardProps> = ({ data, onNext, onHard, stackIndex })
                                     <path fillRule="evenodd" d="M12 2.25a.75.75 0 01.75.75v.816c1.32.122 2.6.438 3.793.923l1.144-2.288a.75.75 0 011.342.67l-1.076 2.152c1.78.966 3.237 2.378 4.168 4.098a.75.75 0 11-1.318.714 8.261 8.261 0 00-2.036-2.583l-1.205 3.614a.75.75 0 01-1.423-.474l.904-2.712A9.771 9.771 0 0012.75 4.582V20.25h2.25a.75.75 0 010 1.5h-6a.75.75 0 010-1.5h2.25V4.582a9.771 9.771 0 00-4.343 2.535l.904 2.712a.75.75 0 01-1.423.474l-1.205-3.614a8.261 8.261 0 00-2.036 2.583.75.75 0 11-1.318-.714 9.766 9.766 0 014.168-4.098L5.968 2.43a.75.75 0 011.342-.67L8.454 4.05c1.193-.485 2.473-.8 3.793-.923V3a.75.75 0 01.75-.75z" clipRule="evenodd" />
                                 </svg>
                              </div>
-                             <span className="text-[10px] text-gold/30 tracking-[0.2em] uppercase font-sans">
-                                Etching Visualization
-                             </span>
                         </div>
 
-                        {/* Word */}
                         <div className="flex items-center gap-2 mb-6">
                             <h1 className="font-mystic text-4xl text-gold text-glow tracking-wide text-center">
                                 {data.word}
@@ -174,7 +173,6 @@ const WordCard: React.FC<WordCardProps> = ({ data, onNext, onHard, stackIndex })
                              </button>
                         </div>
 
-                        {/* Components */}
                         <div className="w-full px-2 mb-8 grid grid-cols-2 gap-y-4 text-center">
                             {data.components.filter(c => c.type === 'prefix').map((p, i) => (
                                 <div key={`pre-${i}`} className="flex flex-col items-center">
@@ -196,14 +194,6 @@ const WordCard: React.FC<WordCardProps> = ({ data, onNext, onHard, stackIndex })
                             )}
                         </div>
 
-                        {/* Origin */}
-                        <div className="flex-1 flex items-center justify-center w-full px-4 text-center mb-6">
-                            <p className="font-serif text-parchment/80 italic text-sm leading-relaxed">
-                                "{data.etymology_story.origin_image}"
-                            </p>
-                        </div>
-
-                        {/* Seal Button */}
                         <div className="mt-auto pt-4 flex flex-col items-center cursor-pointer group" onClick={() => isActive && setIsFlipped(true)}>
                             <div className="w-10 h-10 rounded-full border border-gold/30 flex items-center justify-center bg-midnight/50 group-hover:bg-gold/10 group-hover:scale-110 transition-all">
                                 <span className="text-xl">🔒</span>
@@ -217,11 +207,10 @@ const WordCard: React.FC<WordCardProps> = ({ data, onNext, onHard, stackIndex })
 
 
                 {/* ============================================================
-                    SIDE B: THE REVELATION (背面 - 答案 & 操作面)
+                    SIDE B: THE REVELATION (背面 - 分情况渲染)
                    ============================================================ */}
                 <div 
                     className="absolute inset-0 backface-hidden rotate-y-180 bg-obsidian rounded-xl shadow-glow overflow-hidden"
-                    // CRITICAL FIX: Enable pointer events on Side B only when flipped
                     style={{ pointerEvents: isFlipped ? 'auto' : 'none' }}
                 >
                      {/* Frame */}
@@ -230,37 +219,65 @@ const WordCard: React.FC<WordCardProps> = ({ data, onNext, onHard, stackIndex })
 
                     <div className="w-full h-full relative flex flex-col items-center p-6 z-10">
                         
-                        {/* 1. Top Section: Icon & Word */}
-                        <div className="flex-1 w-full flex flex-col items-center justify-center">
-                            <div className="w-20 h-20 rounded-full border border-gold/30 flex items-center justify-center mb-4 relative">
-                                 <div className="absolute inset-0 bg-gold/10 rounded-full blur-xl animate-pulse"></div>
-                                 <span className="text-4xl filter drop-shadow-lg relative z-10 text-gold">📜</span>
-                            </div>
-                            <h2 className="text-2xl font-mystic text-parchment mb-4 tracking-wider">{data.word}</h2>
-                            
-                            <div className="relative py-3 px-8 mb-4 border-t border-b border-gold/30 w-full text-center bg-gold/5">
-                                <span className="text-3xl font-bold font-serif text-gold text-glow">
-                                    {data.etymology_story.modern_meaning.split(' ')[1] || data.etymology_story.modern_meaning}
-                                </span>
-                            </div>
+                        {/* CONDITIONAL CONTENT: TAROT CARD vs WORD DEFINITION */}
+                        {data.hiddenTarot ? (
+                            // --- CASE 1: FOUND A TAROT CARD! ---
+                            <div className="flex-1 w-full flex flex-col items-center justify-center animate-[pop-in_0.5s]">
+                                <div className="text-gold/50 text-xs uppercase tracking-[0.3em] mb-4">Fate Revealed</div>
+                                
+                                <div 
+                                    className="w-32 h-48 rounded-lg border-2 mb-6 flex flex-col items-center justify-center relative shadow-[0_0_30px_rgba(255,255,255,0.1)]"
+                                    style={{ 
+                                        borderColor: data.hiddenTarot.theme_color,
+                                        backgroundColor: `${data.hiddenTarot.theme_color}20` 
+                                    }}
+                                >
+                                     <div className="text-6xl filter drop-shadow-lg mb-2">{data.hiddenTarot.icon}</div>
+                                     <div className="font-mystic text-lg text-center px-2 leading-none" style={{ color: data.hiddenTarot.theme_color }}>
+                                        {data.hiddenTarot.name}
+                                     </div>
+                                </div>
 
-                            <p className="text-sm font-serif text-parchment/70 text-center leading-relaxed italic max-w-[90%] mb-4">
-                                "{data.nuance.split('。')[0]}。"
-                            </p>
-                            
-                            {/* Chat Button (Small) */}
-                            <button 
-                                onClick={(e) => { e.stopPropagation(); setShowChat(true); }}
-                                className="text-xs text-gold/50 hover:text-gold flex items-center gap-1 border border-gold/20 px-3 py-1 rounded-full hover:bg-gold/10 transition-all z-20"
-                            >
-                                <span>🔮</span> Ask Oracle
-                            </button>
-                        </div>
+                                <p className="text-sm font-serif text-parchment/80 text-center italic max-w-[90%]">
+                                    "{data.hiddenTarot.fortune_text}"
+                                </p>
 
-                        {/* 2. Bottom Section: DECISION BUTTONS */}
+                                <div className="mt-auto mb-4 text-xs text-gold/60 font-bold uppercase tracking-widest animate-pulse">
+                                    Card Collected
+                                </div>
+                            </div>
+                        ) : (
+                            // --- CASE 2: NORMAL WORD DEFINITION ---
+                            <div className="flex-1 w-full flex flex-col items-center justify-center">
+                                <div className="w-20 h-20 rounded-full border border-gold/30 flex items-center justify-center mb-4 relative">
+                                    <div className="absolute inset-0 bg-gold/10 rounded-full blur-xl animate-pulse"></div>
+                                    <span className="text-4xl filter drop-shadow-lg relative z-10 text-gold">📜</span>
+                                </div>
+                                <h2 className="text-2xl font-mystic text-parchment mb-4 tracking-wider">{data.word}</h2>
+                                
+                                <div className="relative py-3 px-8 mb-4 border-t border-b border-gold/30 w-full text-center bg-gold/5">
+                                    <span className="text-3xl font-bold font-serif text-gold text-glow">
+                                        {data.etymology_story.modern_meaning.split(' ')[1] || data.etymology_story.modern_meaning}
+                                    </span>
+                                </div>
+
+                                <p className="text-sm font-serif text-parchment/70 text-center leading-relaxed italic max-w-[90%] mb-4">
+                                    "{data.nuance.split('。')[0]}。"
+                                </p>
+                                
+                                <button 
+                                    onClick={(e) => { e.stopPropagation(); setShowChat(true); }}
+                                    className="text-xs text-gold/50 hover:text-gold flex items-center gap-1 border border-gold/20 px-3 py-1 rounded-full hover:bg-gold/10 transition-all z-20"
+                                >
+                                    <span>🔮</span> Ask Oracle
+                                </button>
+                            </div>
+                        )}
+
+                        {/* DECISION BUTTONS (Always present) */}
                         <div className="w-full pb-2 pt-4 border-t border-gold/10 flex justify-between items-end gap-4 relative z-20">
                             
-                            {/* FORGET BUTTON */}
+                            {/* FORGET */}
                             <button 
                                 onClick={(e) => { 
                                     e.stopPropagation(); 
@@ -274,7 +291,7 @@ const WordCard: React.FC<WordCardProps> = ({ data, onNext, onHard, stackIndex })
                                 <span className="text-[10px] font-mystic text-alchemist/70 tracking-[0.2em] group-hover:text-alchemist">FORGET</span>
                             </button>
 
-                            {/* REMEMBER BUTTON */}
+                            {/* REMEMBER */}
                             <button 
                                 onClick={(e) => { 
                                     e.stopPropagation(); 
@@ -283,9 +300,13 @@ const WordCard: React.FC<WordCardProps> = ({ data, onNext, onHard, stackIndex })
                                 className="flex-1 group flex flex-col items-center gap-2 py-2 rounded-lg hover:bg-white/5 transition-all cursor-pointer"
                             >
                                 <div className="w-12 h-12 rounded-full border border-gold/50 text-gold bg-midnight shadow-[0_0_15px_rgba(197,160,89,0.1)] flex items-center justify-center group-hover:scale-110 group-hover:bg-gold group-hover:text-midnight transition-all duration-300">
-                                    <span className="text-lg">🧠</span>
+                                    <span className="text-lg">
+                                        {data.hiddenTarot ? '🌟' : '🧠'}
+                                    </span>
                                 </div>
-                                <span className="text-[10px] font-mystic text-gold/70 tracking-[0.2em] group-hover:text-gold">REMEMBER</span>
+                                <span className="text-[10px] font-mystic text-gold/70 tracking-[0.2em] group-hover:text-gold">
+                                    {data.hiddenTarot ? 'COLLECT' : 'REMEMBER'}
+                                </span>
                             </button>
 
                         </div>

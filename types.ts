@@ -35,6 +35,9 @@ export interface WordData {
   quote?: Quote;
   related_words?: RelatedWord[]; // Family Ties
   tags: string[];
+  
+  // NEW: Does this word hide a Tarot Card?
+  hiddenTarot?: TarotArcana; 
 }
 
 // --- NEW TAROT TYPES ---

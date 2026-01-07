@@ -14,7 +14,8 @@ const App: React.FC = () => {
   
   // The Reading State
   const [readingCards, setReadingCards] = useState<TarotArcana[]>([]);
-  const [unlockedIndices, setUnlockedIndices] = useState<Set<number>>(new Set([0])); // First card unlocked by default
+  // Store which reading card indices (0, 1, 2) have been found
+  const [unlockedIndices, setUnlockedIndices] = useState<Set<number>>(new Set()); 
   
   // Vocabulary State
   const [deck, setDeck] = useState<WordData[]>([]);
@@ -29,7 +30,28 @@ const App: React.FC = () => {
       
       const firstCard = cards[0];
       const filteredWords = firstCard.filter_logic(initialVocabulary);
-      const finalDeck = filteredWords.length > 0 ? filteredWords : initialVocabulary.slice(0, 3);
+      // Ensure we have enough words to hide cards in. Duplicate if necessary for demo.
+      let baseDeck = filteredWords.length > 0 ? filteredWords : initialVocabulary;
+      while (baseDeck.length < 3) {
+          baseDeck = [...baseDeck, ...baseDeck];
+      }
+
+      // --- LOGIC: HIDE TAROT CARDS IN DECK ---
+      // Deep copy to avoid mutating original data
+      const finalDeck = JSON.parse(JSON.stringify(baseDeck)) as WordData[];
+      
+      // Pick 3 unique random indices to hide the cards
+      const indicesToHide: number[] = [];
+      while(indicesToHide.length < 3 && indicesToHide.length < finalDeck.length) {
+          const r = Math.floor(Math.random() * finalDeck.length);
+          if(indicesToHide.indexOf(r) === -1) indicesToHide.push(r);
+      }
+
+      // Assign the 3 reading cards to these positions
+      indicesToHide.forEach((deckIndex, i) => {
+          finalDeck[deckIndex].hiddenTarot = cards[i];
+      });
+
       setDeck(finalDeck);
       setCurrentIndex(0);
 
@@ -52,6 +74,16 @@ const App: React.FC = () => {
   const progress = Math.round(((currentIndex + 1) / deck.length) * 100);
 
   const handleNextWord = async () => {
+     // CHECK: Did we just find a Tarot card?
+     const currentCard = deck[currentIndex];
+     if (currentCard.hiddenTarot) {
+         // Find which index in readingCards this corresponds to
+         const foundIndex = readingCards.findIndex(c => c.id === currentCard.hiddenTarot?.id);
+         if (foundIndex !== -1) {
+             setUnlockedIndices(prev => new Set(prev).add(foundIndex));
+         }
+     }
+
      if (currentIndex < deck.length - 1) {
          setCurrentIndex(prev => prev + 1);
      } else {
@@ -63,7 +95,7 @@ const App: React.FC = () => {
   const handleReset = () => {
       setAppState('altar');
       setReadingCards([]);
-      setUnlockedIndices(new Set([0]));
+      setUnlockedIndices(new Set());
       setProphecyData(null);
   };
 
@@ -89,27 +121,30 @@ const App: React.FC = () => {
       {appState === 'learning' && deck.length > 0 && currentActiveArcana && (
         <div className="w-full h-full flex flex-col relative animate-fade-in">
             
-            {/* --- TOP RIGHT: TAROT SLOTS (Fate) --- */}
+            {/* --- TOP RIGHT: TAROT SLOTS (The Goals) --- */}
             <div className="absolute right-4 top-16 z-50 flex flex-col gap-4 pointer-events-none">
                 {readingCards.map((card, i) => {
                     const isUnlocked = unlockedIndices.has(i);
-                    const isCurrent = i === 0; 
                     return (
                         <div 
                             key={i}
                             className={`
-                                w-14 h-20 rounded-md border-2 flex items-center justify-center transition-all duration-500 shadow-xl backdrop-blur-md
+                                w-14 h-20 rounded-md border-2 flex items-center justify-center transition-all duration-700 backdrop-blur-md relative
                                 ${isUnlocked 
-                                    ? 'bg-midnight/90 border-gold shadow-[0_0_15px_rgba(197,160,89,0.4)]' 
-                                    : 'bg-black/80 border-white/10 opacity-60 grayscale'
+                                    ? 'bg-midnight/90 border-gold shadow-[0_0_20px_rgba(197,160,89,0.6)] scale-100 opacity-100' 
+                                    : 'bg-black/40 border-white/5 opacity-50 scale-95'
                                 }
-                                ${isCurrent ? 'scale-110 ring-2 ring-gold/50 translate-x-[-4px]' : 'scale-90'}
                             `}
                         >
                             {isUnlocked ? (
                                 <div className="text-2xl animate-[pop-in_0.5s]">{card.icon}</div>
                             ) : (
-                                <div className="text-white/20 text-sm">🔒</div>
+                                // Empty Socket / Locked State
+                                <div className="w-full h-full flex items-center justify-center">
+                                    <div className="w-8 h-8 rounded-full border border-dashed border-white/20 flex items-center justify-center text-[10px] text-white/20">
+                                        ?
+                                    </div>
+                                </div>
                             )}
                         </div>
                     );
@@ -117,7 +152,6 @@ const App: React.FC = () => {
             </div>
 
             {/* --- BOTTOM RIGHT: COLLECTION PILE (Memory) --- */}
-            {/* Z-Index increased to 50 to sit above the card stack */}
             <div className="absolute right-6 bottom-10 z-50 pointer-events-none flex flex-col items-center">
                  <div className="w-16 h-20 bg-midnight rounded-lg border border-gold/30 shadow-[0_0_20px_rgba(197,160,89,0.1)] flex items-center justify-center relative rotate-6 backdrop-blur-sm">
                     {/* Stack Effect */}
