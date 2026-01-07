@@ -1,10 +1,10 @@
 import { GoogleGenAI, Type, Schema } from "@google/genai";
-import { WordData } from "../types";
+import { WordData, TarotArcana, OracleTopic, TarotReadingResponse } from "../types";
 
 const apiKey = process.env.API_KEY || '';
 const ai = new GoogleGenAI({ apiKey });
 
-// Schema for structured output
+// Schema for structured output - Words
 const wordDataSchema: Schema = {
   type: Type.OBJECT,
   properties: {
@@ -42,6 +42,17 @@ const wordDataSchema: Schema = {
     }
   },
   required: ['word', 'root_family', 'components', 'etymology_story', 'nuance']
+};
+
+// Schema for Oracle Reading
+const oracleSchema: Schema = {
+    type: Type.OBJECT,
+    properties: {
+        vibe: { type: Type.STRING, description: "A poetic, one-sentence summary of the fortune in CHINESE." },
+        analysis: { type: Type.STRING, description: "Detailed interpretation connecting the 3 cards to the topic in CHINESE." },
+        advice: { type: Type.STRING, description: "Actionable, concrete advice in CHINESE." }
+    },
+    required: ['vibe', 'analysis', 'advice']
 };
 
 export const fetchWordDetails = async (word: string): Promise<WordData | null> => {
@@ -108,3 +119,59 @@ export const chatWithLogos = async (history: string[], message: string): Promise
         return "连接中断...";
     }
 }
+
+export const getOracleReading = async (cards: TarotArcana[], topic: OracleTopic): Promise<TarotReadingResponse | null> => {
+    if (!apiKey) return null;
+
+    const topicMap: Record<OracleTopic, string> = {
+        love: "姻缘 / 感情 (Love)",
+        wealth: "事业 / 财运 (Career & Wealth)",
+        energy: "综合运势 / 今日指引 (General Energy)",
+        decision: "抉择 / 方向 (Decision Making)"
+    };
+
+    const prompt = `
+    Role: You are a mystical Tarot Reader named Logos.
+    Input:
+    1. Card 1 (The Past/Foundation): ${cards[0].name_cn} (${cards[0].name})
+    2. Card 2 (The Present/Challenge): ${cards[1].name_cn} (${cards[1].name})
+    3. Card 3 (The Future/Outcome): ${cards[2].name_cn} (${cards[2].name})
+    4. User's Question Topic: ${topicMap[topic]}
+
+    Task:
+    Interpret these 3 cards specifically for the User's Question.
+    Do NOT mention studying, English learning, or vocabulary. Focus entirely on the fortune and life advice.
+    Be mystical but grounded. Use **Simplified Chinese**.
+
+    Output Structure (JSON):
+    1. **vibe**: One sentence atmospheric summary (e.g., "A storm is coming, guard your vault.").
+    2. **analysis**: Connect the cards into a story. 
+       - Mention how Card 1 affects the situation.
+       - Mention how Card 2 provides resources or obstacles.
+       - Mention how Card 3 predicts the outcome.
+    3. **advice**: What should the user do today regarding their topic?
+    `;
+
+    try {
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash-preview-09-2025',
+            contents: prompt,
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: oracleSchema
+            }
+        });
+
+        const jsonText = response.text;
+        if (!jsonText) return null;
+        return JSON.parse(jsonText) as TarotReadingResponse;
+
+    } catch (e) {
+        console.error("Oracle Error:", e);
+        return {
+            vibe: "星辰迷雾遮挡了视线...",
+            analysis: "连接中断，无法读取星象。",
+            advice: "请稍后再试。"
+        };
+    }
+};

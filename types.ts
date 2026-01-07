@@ -79,3 +79,13 @@ export interface DailyProphecy {
     reward_text: string; // "任务奖励：..."
     prophecy_text: string; // The philosophical flavor text
 }
+
+// --- ORACLE READING TYPES ---
+
+export type OracleTopic = 'love' | 'wealth' | 'energy' | 'decision';
+
+export interface TarotReadingResponse {
+    vibe: string; // One sentence summary
+    analysis: string; // The detailed story connecting the 3 cards
+    advice: string; // Actionable advice
+}
