@@ -4,16 +4,21 @@ import WordCard from './components/WordCard';
 import TarotTable from './components/TarotTable';
 import DailyProphecyCard from './components/DailyProphecy';
 import ShareCard from './components/ShareCard';
+import Bookshelf from './components/Bookshelf';
 import { initialVocabulary } from './data/vocabulary';
 import { getProphecy } from './data/tarot';
 import { getOracleReading } from './services/geminiService';
-import { WordData, TarotArcana, DailyProphecy, OracleTopic, TarotReadingResponse } from './types';
+import { WordData, TarotArcana, DailyProphecy, OracleTopic, TarotReadingResponse, Grimoire } from './types';
 
-type AppState = 'altar' | 'prophecy_reveal' | 'learning' | 'oracle_ready' | 'oracle_reading';
+// New State: 'library'
+type AppState = 'library' | 'altar' | 'prophecy_reveal' | 'learning' | 'oracle_ready' | 'oracle_reading';
 
 const App: React.FC = () => {
-  const [appState, setAppState] = useState<AppState>('altar');
+  const [appState, setAppState] = useState<AppState>('library'); // Start at Library
   
+  // Book State
+  const [selectedBook, setSelectedBook] = useState<Grimoire | null>(null);
+
   // The Reading State
   const [readingCards, setReadingCards] = useState<TarotArcana[]>([]);
   const [unlockedIndices, setUnlockedIndices] = useState<Set<number>>(new Set()); 
@@ -30,16 +35,18 @@ const App: React.FC = () => {
   const [oracleResult, setOracleResult] = useState<TarotReadingResponse | null>(null);
   const [isConsulting, setIsConsulting] = useState(false);
   
-  // NEW: Step-by-Step Reveal State
-  // 0: Hidden (Selection)
-  // 1: Card 1 (Status) Revealed
-  // 2: Card 2 (Obstacle) Revealed
-  // 3: Card 3 (Revelation) Revealed
-  // 4: Synthesis (All Cards + Summary)
+  // Reveal State
   const [revealStep, setRevealStep] = useState<number>(0);
 
-  // NEW: Share State
+  // Share State
   const [showShareCard, setShowShareCard] = useState(false);
+
+  // --- BOOK SELECTION HANDLER ---
+  const handleBookSelected = (book: Grimoire) => {
+      setSelectedBook(book);
+      // Transition animation effect could go here
+      setAppState('altar');
+  };
 
   // 1. Handle Completion of 3-Card Draw
   const handleReadingComplete = (cards: TarotArcana[]) => {
@@ -149,6 +156,8 @@ const App: React.FC = () => {
   };
 
   const handleReset = () => {
+      // NOTE: We do not reset to 'library' to avoid picking book every time.
+      // Go back to 'altar' (The Table).
       setAppState('altar');
       setReadingCards([]);
       setUnlockedIndices(new Set());
@@ -158,6 +167,11 @@ const App: React.FC = () => {
       setRevealStep(0);
       setShowShareCard(false);
   };
+
+  // Special Case: Initial Load -> Bookshelf
+  if (appState === 'library') {
+      return <Bookshelf onBookSelected={handleBookSelected} />;
+  }
 
   const currentActiveArcana = readingCards[0]; 
 
@@ -215,7 +229,16 @@ const App: React.FC = () => {
       
       {/* STATE: ALTAR (THE TABLE) */}
       {appState === 'altar' && (
-          <TarotTable onReadingComplete={handleReadingComplete} />
+          <div className="relative w-full h-full flex flex-col">
+              {/* Optional: Show selected book icon in corner */}
+              {selectedBook && (
+                  <div className="absolute top-4 left-4 z-50 text-white/20 text-xs flex items-center gap-2">
+                      <span>{selectedBook.icon}</span>
+                      <span className="uppercase tracking-wider">{selectedBook.title}</span>
+                  </div>
+              )}
+              <TarotTable onReadingComplete={handleReadingComplete} />
+          </div>
       )}
 
       {/* STATE: PROPHECY REVEAL */}

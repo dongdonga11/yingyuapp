@@ -40,7 +40,23 @@ export interface WordData {
   hiddenTarot?: TarotArcana; 
 }
 
-// --- NEW TAROT TYPES ---
+// --- BOOKSHELF TYPES ---
+
+export type RealmType = 'apprentice' | 'adept' | 'archmage' | 'guild';
+
+export interface Grimoire {
+    id: string;
+    title: string; // e.g. "CET-4"
+    sub_title: string; // e.g. "Codex of the Scholar"
+    realm: RealmType;
+    word_count: number;
+    difficulty_level: number; // 1-10
+    theme_color: string; // Visual accent
+    description: string; // "Personality" text
+    icon: string; // Cover symbol
+}
+
+// --- TAROT TYPES ---
 
 export type ArcanaType = 'Fool' | 'Magician' | 'HighPriestess' | 'Empress' | 'Emperor' | 'Hierophant' | 'Lovers' | 'Chariot' | 'Strength' | 'Hermit' | 'WheelOfFortune' | 'Justice' | 'HangedMan' | 'Death' | 'Temperance' | 'Devil' | 'Tower' | 'Star' | 'Moon' | 'Sun' | 'Judgement' | 'World';
 
