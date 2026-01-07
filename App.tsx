@@ -28,7 +28,14 @@ const App: React.FC = () => {
   const [oracleTopic, setOracleTopic] = useState<OracleTopic | null>(null);
   const [oracleResult, setOracleResult] = useState<TarotReadingResponse | null>(null);
   const [isConsulting, setIsConsulting] = useState(false);
-  const [cardsRevealed, setCardsRevealed] = useState(false); // Controls the flip animation
+  
+  // NEW: Step-by-Step Reveal State
+  // 0: Hidden (Selection)
+  // 1: Card 1 (Status) Revealed
+  // 2: Card 2 (Obstacle) Revealed
+  // 3: Card 3 (Revelation) Revealed
+  // 4: Synthesis (All Cards + Summary)
+  const [revealStep, setRevealStep] = useState<number>(0);
 
   // 1. Handle Completion of 3-Card Draw
   const handleReadingComplete = (cards: TarotArcana[]) => {
@@ -112,18 +119,29 @@ const App: React.FC = () => {
   // --- ORACLE LOGIC ---
   const handleEnterSanctuary = () => {
       setAppState('oracle_reading');
+      setRevealStep(0); // Reset reveal
   };
 
   const handleTopicSelect = async (topic: OracleTopic) => {
       if(isConsulting) return;
       setOracleTopic(topic);
       setIsConsulting(true);
-      setCardsRevealed(true); // Trigger Flip
-
+      
       // Call Gemini
       const result = await getOracleReading(readingCards, topic);
       setOracleResult(result);
       setIsConsulting(false);
+      
+      // Auto-start reveal sequence after loading
+      if(result) {
+          setRevealStep(1); // Show Card 1 immediately
+      }
+  };
+  
+  const nextReveal = () => {
+      if(revealStep < 4) {
+          setRevealStep(prev => prev + 1);
+      }
   };
 
   const handleReset = () => {
@@ -133,10 +151,59 @@ const App: React.FC = () => {
       setProphecyData(null);
       setOracleTopic(null);
       setOracleResult(null);
-      setCardsRevealed(false);
+      setRevealStep(0);
   };
 
   const currentActiveArcana = readingCards[0]; 
+
+  // Helper to determine Card styling based on reveal step
+  const getOracleCardStyle = (index: number) => {
+      // Index 0: Status (Reveal at Step 1)
+      // Index 1: Obstacle (Reveal at Step 2)
+      // Index 2: Revelation (Reveal at Step 3)
+      const isRevealed = revealStep >= (index + 1);
+      const isCurrentFocus = revealStep === (index + 1);
+      const isSummary = revealStep === 4;
+
+      if (isSummary) {
+          // In summary, all cards are smaller and aligned
+          return {
+              opacity: 1,
+              transform: 'scale(0.8) translateY(0)',
+              filter: 'grayscale(0.3)',
+              isFlipped: true
+          };
+      }
+
+      if (isCurrentFocus) {
+          // The active card is BIG and glowing
+          return {
+              opacity: 1,
+              transform: 'scale(1.1) translateY(10px)',
+              filter: 'brightness(1.2) drop-shadow(0 0 15px rgba(197,160,89,0.5))',
+              zIndex: 50,
+              isFlipped: true
+          };
+      }
+      
+      if (isRevealed) {
+          // Already revealed cards (but not focus)
+          return {
+              opacity: 0.5,
+              transform: 'scale(0.9)',
+              filter: 'grayscale(0.5)',
+              isFlipped: true
+          };
+      }
+
+      // Hidden cards
+      return {
+          opacity: 0.8,
+          transform: 'scale(0.95)',
+          filter: 'brightness(0.5)',
+          isFlipped: false
+      };
+  };
 
   return (
     <Layout themeColor={appState === 'oracle_reading' ? '#9333EA' : currentActiveArcana?.theme_color}>
@@ -250,53 +317,69 @@ const App: React.FC = () => {
           </div>
       )}
 
-      {/* STATE: ORACLE READING (Sanctuary) */}
+      {/* STATE: ORACLE READING (Sanctuary) - FIXED LAYOUT NO SCROLL */}
       {appState === 'oracle_reading' && (
-          <div className="absolute inset-0 z-[100] bg-[#1a1025] flex flex-col items-center justify-center overflow-hidden animate-fade-in">
+          <div className="absolute inset-0 z-[100] bg-[#1a1025] flex flex-col overflow-hidden animate-fade-in">
               
-              {/* Stars Background */}
+              {/* Background Stars */}
               <div className="absolute inset-0 opacity-30 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] animate-[pulse_5s_infinite]"></div>
 
-              <div className="relative w-full max-w-lg h-full flex flex-col p-6 z-10">
+              {/* Header */}
+              <div className="flex-none flex justify-between items-center p-6 z-10">
+                  <h3 className="font-mystic text-purple-300 tracking-widest text-sm">THE SANCTUARY</h3>
+                  <button onClick={handleReset} className="text-white/20 hover:text-white">✕</button>
+              </div>
+
+              {/* Main Content Area */}
+              <div className="flex-1 flex flex-col items-center relative z-10 px-6 pb-6">
                   
-                  {/* Header */}
-                  <div className="flex justify-between items-center mb-6">
-                      <h3 className="font-mystic text-purple-300 tracking-widest text-sm">THE SANCTUARY</h3>
-                      <button onClick={handleReset} className="text-white/20 hover:text-white">✕</button>
+                  {/* --- TOP: CARD DISPLAY AREA --- */}
+                  {/* Fixed height container for cards to ensure they don't jump around */}
+                  <div className="h-[220px] w-full flex items-center justify-center mb-4 perspective-1000">
+                     {/* Show Cards Only if Topic Selected */}
+                     {oracleTopic && (
+                         <div className="flex gap-4 items-center justify-center w-full">
+                            {readingCards.map((card, i) => {
+                                const style = getOracleCardStyle(i);
+                                return (
+                                    <div 
+                                      key={i}
+                                      className={`w-28 h-44 rounded-lg relative preserve-3d transition-all duration-700 ease-out`}
+                                      style={{
+                                          ...style,
+                                          // Override transform if needed, but style object handles scale/translate
+                                          transformStyle: 'preserve-3d',
+                                          transform: `${style.isFlipped ? 'rotateY(0)' : 'rotateY(180deg)'} ${style.transform}`
+                                      }}
+                                    >
+                                        {/* FRONT (Revealed) */}
+                                        <div className="absolute inset-0 backface-hidden bg-midnight rounded-lg border border-purple-500/50 flex flex-col items-center justify-center shadow-[0_0_20px_rgba(168,85,247,0.3)]">
+                                            <div className="text-5xl mb-3">{card.icon}</div>
+                                            <div className="text-[10px] text-purple-200 text-center font-mystic px-1 leading-tight">{card.name_cn}</div>
+                                            {/* Position Label */}
+                                            <div className="absolute -top-3 bg-purple-900 border border-purple-500/50 text-[8px] px-2 py-0.5 rounded-full text-purple-200 uppercase tracking-widest">
+                                                {i === 0 ? 'STATUS' : i === 1 ? 'OBSTACLE' : 'REVELATION'}
+                                            </div>
+                                        </div>
+                                        
+                                        {/* BACK (Hidden) */}
+                                        <div className="absolute inset-0 backface-hidden rotate-y-180 bg-obsidian rounded-lg border border-purple-900 flex items-center justify-center shadow-lg">
+                                            <div className="text-purple-900/50 text-2xl animate-pulse">✦</div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                         </div>
+                     )}
                   </div>
 
-                  {/* CARDS DISPLAY AREA */}
-                  <div className="flex-1 flex flex-col items-center justify-center relative min-h-[300px]">
+                  {/* --- BOTTOM: DYNAMIC TEXT AREA --- */}
+                  <div className="flex-1 w-full max-w-md bg-midnight/40 border border-purple-500/20 rounded-xl backdrop-blur-md p-6 relative overflow-hidden flex flex-col items-center justify-center">
                       
-                      {/* The 3 Cards */}
-                      <div className="flex gap-4 items-center justify-center w-full perspective-1000 mb-8">
-                          {readingCards.map((card, i) => (
-                              <div 
-                                key={i}
-                                className={`
-                                    w-24 h-40 rounded-lg relative preserve-3d transition-transform duration-1000 ease-in-out
-                                    ${cardsRevealed ? 'rotate-y-0' : 'rotate-y-180'}
-                                `}
-                                style={{ transitionDelay: `${i * 300}ms` }}
-                              >
-                                  {/* FRONT (Revealed) */}
-                                  <div className="absolute inset-0 backface-hidden bg-midnight rounded-lg border border-purple-500/50 flex flex-col items-center justify-center shadow-[0_0_20px_rgba(168,85,247,0.3)]">
-                                      <div className="text-4xl mb-2">{card.icon}</div>
-                                      <div className="text-[10px] text-purple-200 text-center font-mystic px-1 leading-tight">{card.name}</div>
-                                  </div>
-                                  
-                                  {/* BACK (Hidden) */}
-                                  <div className="absolute inset-0 backface-hidden rotate-y-180 bg-obsidian rounded-lg border border-purple-900 flex items-center justify-center">
-                                      <div className="text-purple-900/50 text-2xl">✦</div>
-                                  </div>
-                              </div>
-                          ))}
-                      </div>
-
-                      {/* QUESTION SELECTION (Visible if no topic selected) */}
+                      {/* 1. SELECTION PHASE */}
                       {!oracleTopic && (
-                          <div className="w-full animate-fade-in flex flex-col items-center">
-                              <h2 className="text-xl font-serif text-purple-100 italic mb-6 text-center">"What do you seek today?"</h2>
+                          <div className="w-full animate-fade-in text-center">
+                              <h2 className="text-xl font-serif text-purple-100 italic mb-8">"What do you seek today?"</h2>
                               <div className="grid grid-cols-2 gap-4 w-full">
                                   {(['love', 'wealth', 'energy', 'decision'] as OracleTopic[]).map(topic => (
                                       <button
@@ -314,57 +397,95 @@ const App: React.FC = () => {
                           </div>
                       )}
 
-                      {/* LOADING OR RESULT */}
-                      {oracleTopic && (
-                          <div className="w-full flex-1 flex flex-col items-center animate-fade-in">
+                      {/* 2. LOADING PHASE */}
+                      {oracleTopic && !oracleResult && (
+                          <div className="flex flex-col items-center animate-fade-in">
+                               <div className="w-12 h-12 border-4 border-purple-500/20 border-t-purple-500 rounded-full animate-spin mb-4"></div>
+                               <span className="text-purple-300/50 font-mystic tracking-widest text-xs animate-pulse">
+                                  DIVINING THE PATH...
+                               </span>
+                          </div>
+                      )}
+
+                      {/* 3. REVEAL STEPS (LINEAR NARRATIVE) */}
+                      {oracleResult && (
+                          <div className="w-full h-full flex flex-col">
                               
-                              {/* LOADING */}
-                              {(isConsulting || !oracleResult) ? (
-                                  <div className="flex flex-col items-center justify-center h-full">
-                                      <div className="w-16 h-16 border-4 border-purple-500/20 border-t-purple-500 rounded-full animate-spin mb-4"></div>
-                                      <span className="text-purple-300/50 font-mystic tracking-widest text-xs animate-pulse">
-                                          CONSULTING THE STARS...
-                                      </span>
-                                  </div>
-                              ) : (
-                                  /* RESULT DISPLAY */
-                                  <div className="w-full h-full overflow-y-auto custom-scrollbar p-2 animate-[unroll_0.8s_ease-out]">
-                                      
-                                      <div className="bg-midnight/60 border border-purple-500/30 rounded-lg p-6 backdrop-blur-md">
-                                          {/* Vibe */}
-                                          <div className="mb-6 text-center">
-                                              <span className="text-xs text-purple-400 uppercase tracking-[0.2em] block mb-2">The Vibe</span>
-                                              <h3 className="text-lg font-serif italic text-purple-100 leading-relaxed">"{oracleResult.vibe}"</h3>
-                                          </div>
-
-                                          <div className="w-full h-[1px] bg-purple-500/20 mb-6"></div>
-
-                                          {/* Analysis */}
-                                          <div className="mb-6">
-                                              <span className="text-xs text-purple-400 uppercase tracking-[0.2em] block mb-2">The Reading</span>
-                                              <p className="text-sm text-parchment/80 leading-7 font-serif text-justify">
-                                                  {oracleResult.analysis}
-                                              </p>
-                                          </div>
-
-                                          {/* Advice */}
-                                          <div className="bg-purple-500/10 border border-purple-500/20 p-4 rounded text-center">
-                                              <span className="text-xs text-purple-300 font-bold uppercase tracking-[0.1em] block mb-1">Guidance</span>
-                                              <p className="text-purple-100 font-serif">
-                                                  {oracleResult.advice}
-                                              </p>
-                                          </div>
-                                          
-                                          <button onClick={handleReset} className="mt-6 w-full py-3 text-xs text-purple-500/50 hover:text-purple-300 tracking-widest uppercase transition-colors">
-                                              Close Circle
-                                          </button>
+                              {/* Content Container with Transition */}
+                              <div className="flex-1 flex flex-col justify-center items-center text-center">
+                                  
+                                  {/* STEP 1: STATUS */}
+                                  {revealStep === 1 && (
+                                      <div className="animate-[pop-in_0.5s]">
+                                          <span className="text-xs text-purple-400 font-bold uppercase tracking-[0.2em] mb-3 block">Step 1: The Present</span>
+                                          <h3 className="text-xl font-mystic text-white mb-4">{oracleResult.card1_title}</h3>
+                                          <p className="font-serif text-purple-100/90 leading-relaxed italic">
+                                              "{oracleResult.card1_content}"
+                                          </p>
                                       </div>
-                                  </div>
-                              )}
+                                  )}
+
+                                  {/* STEP 2: OBSTACLE */}
+                                  {revealStep === 2 && (
+                                      <div className="animate-[pop-in_0.5s]">
+                                          <span className="text-xs text-red-400 font-bold uppercase tracking-[0.2em] mb-3 block">Step 2: The Obstacle</span>
+                                          <h3 className="text-xl font-mystic text-white mb-4">{oracleResult.card2_title}</h3>
+                                          <p className="font-serif text-purple-100/90 leading-relaxed italic">
+                                              "{oracleResult.card2_content}"
+                                          </p>
+                                      </div>
+                                  )}
+
+                                  {/* STEP 3: REVELATION */}
+                                  {revealStep === 3 && (
+                                      <div className="animate-[pop-in_0.5s]">
+                                          <span className="text-xs text-emerald-400 font-bold uppercase tracking-[0.2em] mb-3 block">Step 3: The Revelation</span>
+                                          <h3 className="text-xl font-mystic text-white mb-4">{oracleResult.card3_title}</h3>
+                                          <p className="font-serif text-purple-100/90 leading-relaxed italic">
+                                              "{oracleResult.card3_content}"
+                                          </p>
+                                      </div>
+                                  )}
+
+                                  {/* STEP 4: SYNTHESIS */}
+                                  {revealStep === 4 && (
+                                      <div className="animate-[unroll_0.8s] w-full text-left">
+                                          <div className="text-center mb-4">
+                                              <h3 className="text-lg font-mystic text-gold text-glow mb-1">{oracleResult.synthesis_title}</h3>
+                                              <div className="w-16 h-[2px] bg-gold/50 mx-auto"></div>
+                                          </div>
+                                          <p className="font-serif text-sm text-parchment leading-7 text-justify bg-black/20 p-4 rounded-lg border border-white/5">
+                                              {oracleResult.synthesis_content}
+                                          </p>
+                                      </div>
+                                  )}
+
+                              </div>
+
+                              {/* NEXT BUTTON */}
+                              <div className="mt-6 flex justify-center w-full">
+                                  {revealStep < 4 ? (
+                                      <button 
+                                        onClick={nextReveal}
+                                        className="px-8 py-3 bg-purple-600 hover:bg-purple-500 text-white font-mystic tracking-widest text-xs uppercase rounded shadow-[0_0_20px_rgba(147,51,234,0.4)] transition-all active:scale-95 animate-pulse"
+                                      >
+                                          {revealStep === 0 ? "Reveal First Card" : revealStep === 3 ? "Show Conclusion" : "Reveal Next"}
+                                      </button>
+                                  ) : (
+                                      <button 
+                                        onClick={handleReset} 
+                                        className="w-full py-3 text-xs text-purple-500/50 hover:text-purple-300 tracking-widest uppercase transition-colors"
+                                      >
+                                          Close Circle
+                                      </button>
+                                  )}
+                              </div>
+
                           </div>
                       )}
 
                   </div>
+
               </div>
           </div>
       )}

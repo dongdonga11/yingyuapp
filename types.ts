@@ -85,7 +85,19 @@ export interface DailyProphecy {
 export type OracleTopic = 'love' | 'wealth' | 'energy' | 'decision';
 
 export interface TarotReadingResponse {
-    vibe: string; // One sentence summary
-    analysis: string; // The detailed story connecting the 3 cards
-    advice: string; // Actionable advice
+    // Phase 1: The Present / Status
+    card1_title: string; // e.g., "现状：隐士的内省"
+    card1_content: string; // "你最近的学习状态比较封闭..."
+
+    // Phase 2: The Obstacle / Challenge
+    card2_title: string; // e.g., "障碍：高塔的突变"
+    card2_content: string; // "外界的干扰打乱了你的节奏..."
+
+    // Phase 3: The Revelation / Advice
+    card3_title: string; // e.g., "启示：战车的行动"
+    card3_content: string; // "不要想太多，直接行动..."
+
+    // Phase 4: Synthesis
+    synthesis_title: string; // e.g., "终极指引"
+    synthesis_content: string; // "综上所述，虽然...但是...建议..."
 }
