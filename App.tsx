@@ -47,37 +47,22 @@ const App: React.FC = () => {
   // --- TAB SWITCHING HANDLER ---
   const handleTabChange = (tab: MainTab) => {
       setActiveTab(tab);
-
-      // Map Tabs to Internal Logic if needed
-      if (tab === 'oracle') {
-          // If we are in 'profile' or 'learning', go back to where we left off in Oracle?
-          // Or strictly go to Altar?
-          // For simplicity: If no reading exists, go to Altar. If reading exists, go to Prophecy/Oracle Ready.
-          if (appState === 'learning' || appState === 'profile') {
-             // Just switch the view, the internal appState can stay valid or reset?
-             // Let's rely on Render Logic to show the right thing based on 'activeTab'.
-             // But we might need to sync appState if we want to "reset" flow.
-             // Actually, let's keep appState as the "Oracle/Learning" flow controller.
-          }
-      }
-      else if (tab === 'grimoire') {
-          // Switch to learning view
-          // If deck is empty, maybe we should show a "Empty Deck" state in the render logic
-      }
-      else if (tab === 'profile') {
-          // Just switch view
-      }
+      // NOTE: We do not reset 'appState' here. 
+      // This allows the user to switch to 'Profile' to check stats, 
+      // then switch back to 'Oracle' and resume their card session exactly where they left off.
   };
 
+  // Called when user selects a book from the Grimoire Tab (Library)
   const handleBookSelected = (book: Grimoire) => {
       setSelectedBook(book);
-      setAppState('altar');
+      // After selecting a book, we automatically move the user to the Altar to begin their journey
+      setAppState('altar'); 
       setActiveTab('oracle');
   };
   
+  // Called from Profile to "Change Book" (Redirects to Grimoire tab)
   const handleChangeBook = () => {
-      setAppState('library');
-      setSelectedBook(null); // Reset
+      setActiveTab('grimoire');
   };
 
   // 1. Handle Completion of 3-Card Draw
@@ -113,15 +98,14 @@ const App: React.FC = () => {
       const p = getProphecy(firstCard, randomWord);
       setProphecyData(p);
       
-      // Move to Reveal Phase (Oracle Tab)
+      // Move to Prophecy Reveal State (Still under Oracle Tab)
       setAppState('prophecy_reveal');
   };
 
   const handleAcceptProphecy = () => {
       setProphecyData(null);
-      // Automatically switch to Learning Tab
+      // Move to Learning State (Still under Oracle Tab)
       setAppState('learning'); 
-      setActiveTab('grimoire');
   };
 
   const progress = Math.round(((currentIndex + 1) / deck.length) * 100);
@@ -144,7 +128,6 @@ const App: React.FC = () => {
          if (nextUnlocked.size === 3) {
              setTimeout(() => {
                  setAppState('oracle_ready');
-                 setActiveTab('oracle'); // Force switch back to Oracle
              }, 1000);
          } else {
              setCurrentIndex(0); 
@@ -184,7 +167,6 @@ const App: React.FC = () => {
       setOracleResult(null);
       setRevealStep(0);
       setShowShareCard(false);
-      setActiveTab('oracle');
   };
 
   // --- RENDER HELPERS ---
@@ -230,40 +212,58 @@ const App: React.FC = () => {
   };
 
   // --- CONDITIONAL CONTENT RENDERER ---
-  // Decides what to show based on `activeTab` AND `appState`
   
   const renderContent = () => {
       
-      // 1. PROFILE TAB
+      // =========================================================
+      // TAB 2: GRIMOIRE (LIBRARY / BOOK SELECTION)
+      // =========================================================
+      // This is now strictly for browsing and selecting books.
+      if (activeTab === 'grimoire') {
+          return <Bookshelf onBookSelected={handleBookSelected} />;
+      }
+
+      // =========================================================
+      // TAB 3: PROFILE (SOUL)
+      // =========================================================
       if (activeTab === 'profile') {
           return (
             <Profile 
                 currentBook={selectedBook} 
-                collectedCards={readingCards} // In real app, this would be a cumulative list
+                collectedCards={readingCards} 
                 onChangeBook={handleChangeBook}
             />
           );
       }
 
-      // 2. GRIMOIRE TAB (Learning)
-      if (activeTab === 'grimoire') {
-          // If deck is empty (not started yet), show placeholder
-          if (deck.length === 0) {
-              return (
-                  <div className="w-full h-full flex flex-col items-center justify-center text-center p-8 animate-fade-in">
-                      <div className="text-4xl mb-4 opacity-50">🔒</div>
-                      <p className="text-parchment/60 font-serif italic mb-4">"The pages are blank. Consult the Oracle to reveal your path."</p>
-                      <button 
-                        onClick={() => setActiveTab('oracle')}
-                        className="text-gold border border-gold/30 px-4 py-2 rounded hover:bg-gold/10 transition-colors"
-                      >
-                          Go to Oracle
-                      </button>
+      // =========================================================
+      // TAB 1: ORACLE (THE MAIN JOURNEY)
+      // =========================================================
+      // This handles the entire flow: Altar -> Prophecy -> Learning -> Oracle Reading
+      
+      // 1. Initial State: The Altar (Shuffle & Draw)
+      if (appState === 'altar' || appState === 'library') {
+          return (
+            <div className="relative w-full h-full flex flex-col pb-24">
+                {selectedBook && (
+                  <div className="absolute top-4 left-4 z-50 text-white/20 text-xs flex items-center gap-2">
+                      <span>{selectedBook.icon}</span>
+                      <span className="uppercase tracking-wider">{selectedBook.title}</span>
                   </div>
-              );
-          }
+                )}
+                <TarotTable onReadingComplete={handleReadingComplete} />
+            </div>
+          );
+      }
 
-          // Otherwise show the Learning View
+      // 2. Prophecy Reveal Overlay
+      if (appState === 'prophecy_reveal' && prophecyData) {
+          return <DailyProphecyCard data={prophecyData} onClose={handleAcceptProphecy} />;
+      }
+
+      // 3. Learning Mode (Flashcards)
+      // This is now part of the Oracle tab, as it is the "Mission" given by the Oracle.
+      if (appState === 'learning') {
           return (
             <div className="w-full h-full flex flex-col relative animate-fade-in">
                 {/* Top Right Tarot Slots (Mini Display) */}
@@ -288,8 +288,8 @@ const App: React.FC = () => {
                 {/* Top Bar */}
                 <div className="pt-6 px-6 pr-20 mb-4 flex-none relative z-40">
                     <div className="flex items-center gap-3 mb-2">
-                        {/* We don't reset here, we just navigate. Reset is in Oracle. */}
                         <span className="text-xs uppercase tracking-[0.2em] text-gold/80">{currentActiveArcana?.name_cn || "Unknown"}</span>
+                        <button onClick={handleReset} className="text-[10px] text-white/20 hover:text-white px-2">ABORT</button>
                     </div>
                     <div className="h-[2px] bg-white/10 rounded-full overflow-hidden w-full max-w-[200px]">
                         <div className="h-full transition-all duration-500 shadow-[0_0_10px_currentColor]" style={{ width: `${progress}%`, backgroundColor: currentActiveArcana?.theme_color || '#C5A059' }}></div>
@@ -312,58 +312,7 @@ const App: React.FC = () => {
           );
       }
 
-      // 3. ORACLE TAB (Default)
-      // Checks internal appState
-      
-      if (appState === 'altar') {
-          return (
-            <div className="relative w-full h-full flex flex-col pb-24">
-                {selectedBook && (
-                  <div className="absolute top-4 left-4 z-50 text-white/20 text-xs flex items-center gap-2">
-                      <span>{selectedBook.icon}</span>
-                      <span className="uppercase tracking-wider">{selectedBook.title}</span>
-                  </div>
-                )}
-                <TarotTable onReadingComplete={handleReadingComplete} />
-            </div>
-          );
-      }
-
-      if (appState === 'prophecy_reveal' && prophecyData) {
-          return <DailyProphecyCard data={prophecyData} onClose={handleAcceptProphecy} />;
-      }
-
-      // If user is "learning" but clicked back to Oracle tab, show a "In Progress" or summary state?
-      // Or just redirect them to Altar if they want to start over? 
-      // For now, let's show the Oracle Ready state if they collected everything, otherwise Altar.
-      if (appState === 'learning') {
-          // If they are in learning, Oracle tab acts as "Home".
-          // Maybe show a "Mission In Progress" dashboard?
-          return (
-              <div className="w-full h-full flex flex-col items-center justify-center p-8 animate-fade-in">
-                  <div className="w-24 h-24 rounded-full border-4 border-gold/20 flex items-center justify-center animate-spin-slow mb-6">
-                      <span className="text-4xl">⏳</span>
-                  </div>
-                  <h2 className="font-mystic text-xl text-gold mb-2">Mission Active</h2>
-                  <p className="text-center text-parchment/60 font-serif italic mb-6">
-                      "You are currently traversing the path of {currentActiveArcana?.name}. Complete the Grimoire to return here."
-                  </p>
-                  <button 
-                    onClick={() => setActiveTab('grimoire')}
-                    className="px-6 py-3 bg-gold text-midnight font-bold tracking-widest uppercase text-xs rounded shadow-glow"
-                  >
-                      Continue Journey
-                  </button>
-                  <button 
-                    onClick={handleReset}
-                    className="mt-4 text-xs text-white/30 hover:text-white underline"
-                  >
-                      Abandon Quest (Reset)
-                  </button>
-              </div>
-          );
-      }
-
+      // 4. Oracle Ready (Mission Complete)
       if (appState === 'oracle_ready') {
          return (
           <div className="absolute inset-0 z-[50] bg-midnight/90 backdrop-blur-lg flex flex-col items-center justify-center animate-fade-in pb-24">
@@ -389,6 +338,7 @@ const App: React.FC = () => {
          );
       }
 
+      // 5. The Sanctuary (Reading Result)
       if (appState === 'oracle_reading') {
          return (
             <div className="absolute inset-0 z-[50] bg-[#1a1025] flex flex-col overflow-hidden animate-fade-in pb-24">
@@ -400,6 +350,7 @@ const App: React.FC = () => {
               </div>
 
               <div className="flex-1 flex flex-col items-center relative z-10 px-6 pb-6 overflow-y-auto custom-scrollbar">
+                  {/* ... (Same Oracle Reading UI as before) ... */}
                   {/* --- TOP: CARD DISPLAY AREA --- */}
                   <div className="h-[180px] w-full flex items-center justify-center mb-4 perspective-1000 flex-none">
                      {oracleTopic && (
@@ -512,6 +463,7 @@ const App: React.FC = () => {
                           </div>
                       )}
                   </div>
+
               </div>
           </div>
          );
@@ -522,8 +474,9 @@ const App: React.FC = () => {
 
   // --- MAIN RENDER ---
 
-  // Special Case: Initial Load -> Bookshelf (No Nav Bar yet)
-  if (appState === 'library') {
+  // Special Case: Initial Load -> Bookshelf (No Nav Bar yet, force user to pick first book)
+  // We use the same 'library' state, but if selectedBook is null, we can treat it as initialization.
+  if (appState === 'library' && !selectedBook) {
       return <Bookshelf onBookSelected={handleBookSelected} />;
   }
 
@@ -535,7 +488,7 @@ const App: React.FC = () => {
           {renderContent()}
       </div>
 
-      {/* NAVIGATION BAR (Always present after library) */}
+      {/* NAVIGATION BAR (Always present after initial book selection) */}
       <NavBar currentTab={activeTab} onChange={handleTabChange} />
 
       {/* GLOBAL OVERLAYS */}
