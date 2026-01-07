@@ -117,3 +117,5 @@ export interface TarotReadingResponse {
     synthesis_title: string; // e.g., "终极指引"
     synthesis_content: string; // "综上所述，虽然...但是...建议..."
 }
+
+export type AppState = 'library' | 'altar' | 'prophecy_reveal' | 'learning' | 'oracle_ready' | 'oracle_reading' | 'profile';
