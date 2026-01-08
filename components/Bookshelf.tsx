@@ -130,17 +130,22 @@ const Bookshelf: React.FC<BookshelfProps> = ({ onBookSelected }) => {
         const targetHeight = 384; // h-96
 
         // Center position calculation
-        // Note: Using window dimensions can be slightly risky with resize, but fine for this animation
         const centerLeft = (window.innerWidth - targetWidth) / 2;
         const centerTop = (window.innerHeight - targetHeight) / 2;
 
         if (isOpeningOrClosing) {
             // State: AT THE SHELF
-            // We set width to FULL TARGET WIDTH (256px) but rotate it 90deg so we only see the spine.
-            // Positioning: The Spine (Left Edge) must align with sourceRect.left
+            // CRITICAL MATH: 
+            // The container rotates 90deg Y.
+            // The spine inside translates Z+20px (Front Plane).
+            // In the rotated parent frame, Z+ points Right (Screen X+).
+            // So the spine appears shifted 20px to the Right.
+            // We subtract 20px from 'left' to align the visual spine with the sourceRect spine.
+            const thicknessOffset = 20; 
+            
             return {
                 top: `${sourceRect.top}px`,
-                left: `${sourceRect.left}px`,
+                left: `${sourceRect.left - thicknessOffset}px`,
                 width: `${targetWidth}px`, 
                 height: `${sourceRect.height}px`, // Interpolate height from spine height
                 transform: 'translate3d(0,0,0) rotateY(90deg)', // Face the spine to viewer
@@ -229,7 +234,7 @@ const Bookshelf: React.FC<BookshelfProps> = ({ onBookSelected }) => {
                             className="absolute inset-0 rounded-r-md flex flex-col items-center p-6 text-center justify-between backface-hidden overflow-hidden"
                             style={{
                                 backgroundColor: '#1a1412',
-                                transform: 'translateZ(20px)', // Thicker Z (was 10)
+                                transform: 'translateZ(20px)', // Thicker Z (Front Plane)
                                 boxShadow: 'inset 5px 0 15px rgba(0,0,0,0.8), 10px 10px 30px rgba(0,0,0,0.8)'
                             }}
                         >
@@ -276,11 +281,16 @@ const Bookshelf: React.FC<BookshelfProps> = ({ onBookSelected }) => {
                         </div>
 
                         {/* =======================
-                            VISUAL: SPINE
+                            VISUAL: SPINE (Left Face)
                            ======================= */}
                         <div 
-                            className="absolute top-0 bottom-0 left-0 bg-[#16100e] transform origin-left rotate-y-[-90deg] flex flex-col items-center justify-center border-l border-white/5 overflow-hidden"
-                            style={{ width: '40px' }} // Fixed spine width
+                            className="absolute top-0 bottom-0 left-0 bg-[#16100e] flex flex-col items-center justify-center border-l border-white/5 overflow-hidden"
+                            style={{ 
+                                width: '40px',
+                                // GEOMETRY FIX: Start at Front Plane (Z20) and hinge back 90deg to form Left Face
+                                transform: 'translateZ(20px) rotateY(-90deg)', 
+                                transformOrigin: 'left center' 
+                            }} 
                         >
                             {/* We keep the spine content visible even during flight so it looks consistent when it lands */}
                             <div className="absolute inset-0 opacity-40 mix-blend-overlay" style={{ backgroundColor: selectedBook.theme_color }}></div>
@@ -297,12 +307,15 @@ const Bookshelf: React.FC<BookshelfProps> = ({ onBookSelected }) => {
                         </div>
 
                         {/* =======================
-                            VISUAL: PAGES (Side)
+                            VISUAL: PAGES (Right Face)
                            ======================= */}
                         <div 
-                            className="absolute top-1 bottom-1 right-0 bg-[#e3dac9] transform origin-right rotate-y-[-90deg] translate-z-[-20px]"
+                            className="absolute top-1 bottom-1 right-0 bg-[#e3dac9]"
                             style={{
-                                width: '38px', // Slightly less than 40 to account for cover overlap
+                                width: '36px', // Slightly narrower to tuck inside covers
+                                // GEOMETRY FIX: Start at Front Plane (Z20) and hinge back 90deg to form Right Face
+                                transform: 'translateZ(20px) rotateY(90deg)',
+                                transformOrigin: 'right center',
                                 backgroundImage: "linear-gradient(to right, #dcd1b4 1px, transparent 1px)",
                                 backgroundSize: "2px 100%"
                             }}
@@ -312,8 +325,11 @@ const Bookshelf: React.FC<BookshelfProps> = ({ onBookSelected }) => {
                             VISUAL: BACK COVER
                            ======================= */}
                         <div 
-                            className="absolute inset-0 bg-[#1a1412] rounded-l-md transform translate-z-[-20px] rotate-y-180"
-                            style={{ boxShadow: '0 0 20px rgba(0,0,0,0.5)' }}
+                            className="absolute inset-0 bg-[#1a1412] rounded-l-md"
+                            style={{ 
+                                transform: 'translateZ(-20px) rotateY(180deg)',
+                                boxShadow: '0 0 20px rgba(0,0,0,0.5)'
+                            }}
                         ></div>
 
                         {/* Close Button (X) - Only visible when open */}
