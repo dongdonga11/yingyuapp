@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { LIBRARY_ARCHIVE } from '../data/books';
 import { Grimoire } from '../types';
 
@@ -80,12 +80,12 @@ const Bookshelf: React.FC<BookshelfProps> = ({ onBookSelected }) => {
     const handleSpineClick = (book: Grimoire) => {
         setIsAnimating(true);
         setSelectedBook(book);
-        // Remove animation class after transition to allow free interaction if needed
+        // Quick entrance animation flag
         setTimeout(() => setIsAnimating(false), 800);
     };
 
     const handleClose = () => {
-        setIsAnimating(true); // Trigger exit animation state if we were to implement unmount animations
+        // No exit animation needed for now, just close
         setSelectedBook(null);
     };
 
@@ -133,26 +133,31 @@ const Bookshelf: React.FC<BookshelfProps> = ({ onBookSelected }) => {
                 </div>
             </div>
 
-            {/* --- INSPECTION MODAL (The Pull Animation) --- */}
+            {/* --- INSPECTION MODAL (Semi-Transparent) --- */}
             {selectedBook && (
                 <div 
-                    className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm animate-fade-in cursor-pointer"
-                    onClick={handleClose}
+                    className="absolute inset-0 z-50 flex items-center justify-center animate-fade-in"
                 >
+                    {/* 1. Translucent Backdrop (Click to close) */}
                     <div 
-                        className="relative perspective-1000"
-                        onClick={(e) => e.stopPropagation()} // Keep book open if clicking book itself
+                        className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-all duration-500"
+                        onClick={handleClose}
+                    ></div>
+
+                    {/* 2. The Floating Book (No click to close) */}
+                    <div 
+                        className="relative perspective-1000 z-10 pointer-events-none" // pointer-events-none on container, auto on children
                     >
                         {/* The Flying Book Container */}
                         <div 
                             className={`
-                                relative w-64 h-96 transition-all duration-700 ease-out preserve-3d
-                                ${isBinding ? 'animate-[shake_0.5s_ease-in-out_infinite] scale-0 opacity-0' : ''}
-                                ${isAnimating ? 'rotate-y-[-15deg] translate-z-[100px]' : 'rotate-y-0'}
+                                relative w-64 h-96 transition-all duration-700 ease-out preserve-3d pointer-events-auto
+                                ${isBinding ? 'animate-[shake_0.5s_ease-in-out_infinite] scale-110' : ''}
                             `}
                             style={{
-                                // Initial state for animation (Coming from spine view)
-                                transform: isAnimating ? 'rotateY(-80deg) translateX(-100px)' : 'rotateY(-10deg)',
+                                // Initial state: Rotate from spine view (-90) to front (0)
+                                // We simulate the "Pull" effect
+                                transform: isAnimating ? 'rotateY(-80deg) translateX(-50px)' : 'rotateY(-10deg)',
                             }}
                         >
                             {/* === FRONT COVER === */}
@@ -161,13 +166,19 @@ const Bookshelf: React.FC<BookshelfProps> = ({ onBookSelected }) => {
                                 style={{
                                     backgroundColor: '#1a1412',
                                     transform: 'translateZ(15px)',
-                                    boxShadow: 'inset 5px 0 15px rgba(0,0,0,0.8), 10px 10px 30px rgba(0,0,0,0.5)'
+                                    boxShadow: 'inset 5px 0 15px rgba(0,0,0,0.8), 20px 20px 50px rgba(0,0,0,0.8)'
                                 }}
                             >
                                 {/* Texture & Border */}
                                 <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/black-scales.png')] opacity-60 mix-blend-multiply rounded-r-md"></div>
                                 <div className="absolute inset-3 border border-gold/40 rounded-sm pointer-events-none"></div>
                                 
+                                {/* Corner Decorations */}
+                                <div className="absolute top-3 left-3 w-4 h-4 border-t border-l border-gold/60"></div>
+                                <div className="absolute top-3 right-3 w-4 h-4 border-t border-r border-gold/60"></div>
+                                <div className="absolute bottom-3 left-3 w-4 h-4 border-b border-l border-gold/60"></div>
+                                <div className="absolute bottom-3 right-3 w-4 h-4 border-b border-r border-gold/60"></div>
+
                                 {/* Content */}
                                 <div className="relative z-10 flex flex-col h-full items-center justify-between py-4">
                                     <div className="text-gold/60 text-[10px] tracking-[0.3em] font-mystic">GRIMOIRE</div>
@@ -175,12 +186,16 @@ const Bookshelf: React.FC<BookshelfProps> = ({ onBookSelected }) => {
                                     {/* Center Art */}
                                     <div className="w-24 h-24 rounded-full border border-gold/20 flex items-center justify-center relative">
                                         <div className="absolute inset-0 animate-[spin_20s_linear_infinite] opacity-30 border border-dashed border-gold/30 rounded-full"></div>
+                                        <div className="absolute inset-0 bg-gold/5 rounded-full blur-xl"></div>
                                         <div className="text-5xl filter drop-shadow-[0_0_10px_rgba(197,160,89,0.5)]">{selectedBook.icon}</div>
                                     </div>
 
                                     <div>
-                                        <h2 className="font-serif text-2xl text-parchment font-bold mb-1 text-shadow">{selectedBook.title}</h2>
-                                        <p className="font-serif text-[10px] text-white/50 italic px-4 leading-relaxed">
+                                        <h2 className="font-serif text-2xl text-parchment font-bold mb-2 text-shadow" style={{ color: selectedBook.theme_color }}>
+                                            {selectedBook.title}
+                                        </h2>
+                                        <div className="w-8 h-[1px] bg-gold/30 mx-auto mb-2"></div>
+                                        <p className="font-serif text-[10px] text-white/60 italic px-2 leading-relaxed">
                                             "{selectedBook.description}"
                                         </p>
                                     </div>
@@ -188,9 +203,9 @@ const Bookshelf: React.FC<BookshelfProps> = ({ onBookSelected }) => {
                                     {/* Action Button */}
                                     <button 
                                         onClick={handleBind}
-                                        className="w-full py-3 mt-2 border border-gold/30 text-gold hover:bg-gold hover:text-midnight transition-colors font-mystic text-sm uppercase tracking-widest shadow-[0_0_15px_rgba(197,160,89,0.1)]"
+                                        className="w-full py-3 mt-4 border border-gold/30 bg-gold/5 text-gold hover:bg-gold hover:text-midnight transition-all font-mystic text-xs uppercase tracking-widest shadow-[0_0_15px_rgba(197,160,89,0.1)] group"
                                     >
-                                        {isBinding ? 'Sealing...' : 'Open Tome'}
+                                        {isBinding ? 'Unlocking...' : 'Open Grimoire'}
                                     </button>
                                 </div>
                             </div>
@@ -221,9 +236,14 @@ const Bookshelf: React.FC<BookshelfProps> = ({ onBookSelected }) => {
 
                         </div>
                         
-                        {/* Instruction Hint */}
-                        <div className={`mt-12 text-center transition-opacity duration-1000 ${isAnimating ? 'opacity-0' : 'opacity-100'}`}>
-                            <p className="text-[10px] text-white/30 uppercase tracking-widest">Tap background to return</p>
+                        {/* Close Button (X) */}
+                        <div className="absolute -top-10 right-0 pointer-events-auto">
+                            <button 
+                                onClick={handleClose}
+                                className="w-8 h-8 rounded-full border border-white/10 text-white/40 flex items-center justify-center hover:bg-white/10 hover:text-white transition-colors"
+                            >
+                                ✕
+                            </button>
                         </div>
                     </div>
                 </div>
