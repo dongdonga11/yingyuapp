@@ -53,14 +53,7 @@ const App: React.FC = () => {
   const [ritualStage, setRitualStage] = useState<RitualStage>('selection');
   const [oracleTopic, setOracleTopic] = useState<OracleTopic | null>(null);
   const [oracleResult, setOracleResult] = useState<TarotReadingResponse | null>(null);
-  const [showFlash, setShowFlash] = useState(false); // For the white-out effect
-  
-  // Ritual Visual State
-  const [hoveredTopic, setHoveredTopic] = useState<OracleTopic | null>(null);
-  // Source Coordinate for the particle stream
-  const [streamSource, setStreamSource] = useState<{x: number, y: number} | null>(null);
-  
-  // Share State
+  const [showFlash, setShowFlash] = useState(false); 
   const [showShareCard, setShowShareCard] = useState(false);
 
   // --- TAB SWITCHING HANDLER ---
@@ -161,78 +154,28 @@ const App: React.FC = () => {
       setRitualStage('selection'); 
       setOracleTopic(null);
       setOracleResult(null);
-      setHoveredTopic(null);
-      setStreamSource(null);
   };
 
   // --- RITUAL LOGIC ---
 
   const topicConfig = {
-      love: { 
-          color: '#4ADE80', // Green (Life/Heart)
-          label: 'Love', 
-          icon: '🌿', // Nature/Life
-          pos: 'top-10 left-1/2 -translate-x-1/2',
-          coord: {x: 0.5, y: 0.1}
-      },
-      wealth: { 
-          color: '#FBBF24', // Gold (Sun)
-          label: 'Wealth', 
-          icon: '☀️', // Sun
-          pos: 'bottom-32 left-8',
-          coord: {x: 0.15, y: 0.8}
-      },
-      decision: { 
-          color: '#60A5FA', // Blue (Ice/Mind)
-          label: 'Logic', 
-          icon: '❄️', // Ice
-          pos: 'bottom-32 right-8',
-          coord: {x: 0.85, y: 0.8}
-      },
-      energy: { 
-          color: '#F87171', // Red (Fire/Power)
-          label: 'Power', 
-          icon: '🔥', // Fire
-          pos: 'top-[45%] right-4', // Right side (optional slot, or remove if 3 orbs desired. User ref had 4)
-          // Adjusting user image ref: 4 circles. Let's do diamond layout.
-          // Top(Love), Bottom(Wealth), Left(Decision), Right(Energy)
-          // Wait, user ref image is circular. Let's do 4 corners or Diamond.
-      },
+      love: { color: '#4ADE80', label: 'Love', icon: '💘', id: 'love' },
+      wealth: { color: '#FBBF24', label: 'Wealth', icon: '💰', id: 'wealth' },
+      decision: { color: '#60A5FA', label: 'Logic', icon: '⚔️', id: 'decision' },
+      energy: { color: '#F87171', label: 'Energy', icon: '🔥', id: 'energy' },
   };
-
-  // Redefining positions for Diamond Layout around center
-  const orbs = [
-      { id: 'love', ...topicConfig.love, style: { top: '5%', left: '50%', transform: 'translateX(-50%)' }, cx: 0.5, cy: 0.1 },
-      { id: 'wealth', ...topicConfig.wealth, style: { bottom: '20%', left: '10%' }, cx: 0.15, cy: 0.8 }, 
-      { id: 'decision', ...topicConfig.decision, style: { bottom: '20%', right: '10%' }, cx: 0.85, cy: 0.8 },
-      { id: 'energy', ...topicConfig.energy, style: { top: '50%', right: '5%', transform: 'translateY(-50%)' }, cx: 0.95, cy: 0.5 } 
-      // Actually, let's stick to a clean Triangle + 1 Center or Square. 
-      // Let's do: Top, Bottom, Left, Right relative to the Magic Circle.
-  ];
-
-  // Final Layout Coordinates for Orbs (Relative to screen)
-  const orbLayout: Record<string, { top?: string, bottom?: string, left?: string, right?: string, cx: number, cy: number }> = {
-      love: { top: '15%', left: '50%', cx: 0.5, cy: 0.15 }, // Top
-      wealth: { bottom: '15%', left: '50%', cx: 0.5, cy: 0.85 }, // Bottom
-      decision: { top: '50%', left: '10%', cx: 0.1, cy: 0.5 }, // Left
-      energy: { top: '50%', right: '10%', cx: 0.9, cy: 0.5 } // Right
-  };
-
 
   const handleSelectTopic = async (topic: OracleTopic) => {
       if (ritualStage !== 'selection') return;
       
       setOracleTopic(topic);
-      setRitualStage('channeling');
-      
-      // Set source for particle stream
-      const layout = orbLayout[topic];
-      setStreamSource({ x: layout.cx, y: layout.cy });
+      // Wait a tiny bit for the click animation
+      setTimeout(() => setRitualStage('channeling'), 100);
 
-      // 2 seconds of Channeling, then Flash
+      // 3 seconds of Channeling (Spinning Array + Runes)
       setTimeout(() => {
           setShowFlash(true); // White out
-      }, 2000);
+      }, 3000);
 
       // Trigger API in background
       const result = await getOracleReading(readingCards, topic);
@@ -242,7 +185,7 @@ const App: React.FC = () => {
           setOracleResult(result);
           setRitualStage('revelation');
           setShowFlash(false);
-      }, 3500); 
+      }, 4500); 
   };
 
   const handleReset = () => {
@@ -310,7 +253,7 @@ const App: React.FC = () => {
       }
 
       // =========================================================================
-      // THE NEW MAGIC CIRCLE RITUAL
+      // THE MAGIC ARRAY RITUAL (CARD INSERTION MODE)
       // =========================================================================
       if (appState === 'oracle_reading') {
          
@@ -319,7 +262,7 @@ const App: React.FC = () => {
          return (
             <div className="absolute inset-0 z-[50] bg-[#050508] flex flex-col items-center justify-center overflow-hidden animate-fade-in">
               
-              {/* Background: Deep Space */}
+              {/* Background */}
               <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-purple-900/20 via-[#050508] to-black z-0"></div>
               <div className="absolute inset-0 opacity-30 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] z-0"></div>
 
@@ -328,17 +271,33 @@ const App: React.FC = () => {
                   <div className="absolute inset-0 z-[999] bg-white animate-white-out pointer-events-none"></div>
               )}
 
-              {/* 2. Particle Canvas (Interacts with Center and Orbs) */}
+              {/* 2. Particle Canvas (Runes Implosion) */}
               <RitualCanvas 
-                  source={streamSource} 
                   target={{x: 0.5, y: 0.5}} 
                   color={activeColor}
-                  mode={ritualStage === 'selection' ? 'idle' : 'stream'}
+                  mode={ritualStage === 'channeling' ? 'implode' : 'idle'}
               />
 
-              {/* 3. The Central Magic Array */}
-              <div className="relative z-10">
-                  <MagicArray isActive={ritualStage === 'channeling'} />
+              {/* 3. The Central Magic Array & Card Slot */}
+              <div className="relative z-10 mb-20">
+                  <MagicArray isActive={ritualStage === 'channeling'}>
+                      {/* CARD IN THE CENTER */}
+                      {oracleTopic && (
+                          <div 
+                            className={`
+                                w-32 h-48 rounded-lg border border-gold/50 bg-midnight shadow-[0_0_30px_currentColor] flex flex-col items-center justify-center relative overflow-hidden
+                                ${ritualStage === 'channeling' ? 'animate-fly-center' : 'opacity-0'}
+                            `}
+                            style={{ color: activeColor }}
+                          >
+                               <div className="absolute inset-0 bg-gold/10 mix-blend-overlay"></div>
+                               <div className="text-4xl filter drop-shadow-md">{topicConfig[oracleTopic].icon}</div>
+                               <div className="absolute bottom-4 font-mystic text-xs tracking-widest uppercase">{topicConfig[oracleTopic].label}</div>
+                               {/* Energy beams */}
+                               <div className="absolute inset-0 bg-gradient-to-t from-transparent via-white/10 to-transparent animate-[shimmer_2s_infinite]"></div>
+                          </div>
+                      )}
+                  </MagicArray>
               </div>
 
               {/* Top Bar */}
@@ -347,67 +306,31 @@ const App: React.FC = () => {
                   <button onClick={handleReset} className="text-white/20 hover:text-white">✕</button>
               </div>
 
-              {/* STAGE A: SELECTION (The Orbs) */}
+              {/* STAGE A: SELECTION (Bottom Deck) */}
               {ritualStage !== 'revelation' && (
-                  <div className="absolute inset-0 z-20 pointer-events-none">
-                      {Object.entries(orbLayout).map(([key, pos]) => {
-                          const topic = key as OracleTopic;
-                          const config = topicConfig[topic];
-                          const isSelected = oracleTopic === topic;
-                          const isHidden = oracleTopic && oracleTopic !== topic;
-                          
-                          // Convert pos object to style with transform translation to center elements
-                          const style: React.CSSProperties = {
-                              position: 'absolute',
-                              top: pos.top,
-                              bottom: pos.bottom,
-                              left: pos.left,
-                              right: pos.right,
-                              transform: pos.left === '50%' ? 'translateX(-50%)' : (pos.top === '50%' ? 'translateY(-50%)' : 'none'),
-                              pointerEvents: 'auto'
-                          };
-
+                  <div className={`absolute bottom-8 left-0 right-0 flex justify-center gap-4 z-20 transition-all duration-700 ${ritualStage === 'channeling' ? 'translate-y-40 opacity-0' : 'translate-y-0 opacity-100'}`}>
+                      {(['love', 'wealth', 'decision', 'energy'] as OracleTopic[]).map((key) => {
+                          const config = topicConfig[key];
                           return (
                               <div 
                                 key={key}
-                                className={`
-                                    w-20 h-20 md:w-24 md:h-24 rounded-full flex items-center justify-center cursor-pointer transition-all duration-700
-                                    ${isHidden ? 'opacity-0 scale-50' : 'opacity-100'}
-                                    ${isSelected ? 'scale-125 shadow-[0_0_50px_currentColor]' : 'hover:scale-110 animate-float'}
-                                `}
-                                style={{ ...style, color: config.color }}
-                                onClick={() => handleSelectTopic(topic)}
-                                onMouseEnter={() => setHoveredTopic(topic)}
-                                onMouseLeave={() => setHoveredTopic(null)}
+                                onClick={() => handleSelectTopic(key)}
+                                className="w-20 h-32 bg-obsidian border border-gold/30 rounded cursor-pointer hover:-translate-y-4 hover:border-gold hover:shadow-[0_0_20px_rgba(197,160,89,0.3)] transition-all duration-300 flex flex-col items-center justify-center group"
                               >
-                                  {/* THE ORB VISUAL */}
-                                  <div 
-                                    className="absolute inset-0 rounded-full border border-white/20"
-                                    style={{
-                                        background: `radial-gradient(circle at 30% 30%, rgba(255,255,255,0.9), ${config.color}, #000)`,
-                                        boxShadow: `0 0 20px ${config.color}80, inset 0 0 20px rgba(0,0,0,0.5)`
-                                    }}
-                                  ></div>
-                                  
-                                  {/* Icon */}
-                                  <div className="relative z-10 text-3xl filter drop-shadow-md">{config.icon}</div>
-                                  
-                                  {/* Label */}
-                                  <div className="absolute -bottom-8 font-mystic text-[10px] uppercase tracking-[0.2em] text-white/60">
-                                      {config.label}
-                                  </div>
+                                  <div className="text-2xl mb-2 grayscale group-hover:grayscale-0 transition-all">{config.icon}</div>
+                                  <span className="font-mystic text-[10px] text-gold/50 group-hover:text-gold uppercase tracking-wider">{config.label}</span>
                               </div>
-                          );
+                          )
                       })}
                   </div>
               )}
 
               {/* STAGE B: REVELATION (Result) */}
               {ritualStage === 'revelation' && oracleResult && (
-                  <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black/60 backdrop-blur-xl animate-fade-in p-6">
+                  <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black/80 backdrop-blur-xl animate-fade-in p-6">
                       
-                      {/* Result Scroll (Reused UI logic) */}
-                      <div className="w-full max-w-md bg-black/80 border border-gold/30 rounded-xl p-6 shadow-2xl overflow-y-auto max-h-full custom-scrollbar animate-pop-in">
+                      {/* Result Scroll */}
+                      <div className="w-full max-w-md bg-black/90 border border-gold/30 rounded-xl p-6 shadow-2xl overflow-y-auto max-h-full custom-scrollbar animate-pop-in">
                           <div className="text-center mb-6">
                               <h2 className="font-mystic text-xl text-gold mb-2 text-glow">{oracleResult.synthesis_title}</h2>
                               <div className="w-16 h-[1px] bg-gold/50 mx-auto"></div>

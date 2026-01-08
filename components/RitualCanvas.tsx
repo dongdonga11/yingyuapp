@@ -1,30 +1,30 @@
 import React, { useEffect, useRef } from 'react';
 
 interface RitualCanvasProps {
-    source: { x: number, y: number } | null; // Normalized 0-1 (The Orb position)
-    target: { x: number, y: number }; // Normalized 0-1 (The Center/Array)
+    target: { x: number, y: number }; // Normalized center (usually 0.5, 0.5)
     color: string;
-    mode: 'idle' | 'stream';
+    mode: 'idle' | 'implode'; // 'implode' sucks particles INTO the center
 }
 
 interface Particle {
     x: number;
     y: number;
     size: number;
-    speed: number;
-    life: number;
-    maxLife: number;
+    char: string; // Rune character
     
-    // Stream logic
-    vx: number;
-    vy: number;
-    
-    // Orbit logic
+    // Physics
     angle: number;
     radius: number;
+    speed: number;
+    rotation: number;
+    
+    // Appearance
+    alpha: number;
 }
 
-const RitualCanvas: React.FC<RitualCanvasProps> = ({ source, target, color, mode }) => {
+const RUNES = "ᚠᚢᚦᚨᚱᚲᚷᚹᚺᚾᛁᛃᛇᛈᛉᛊᛏᛒᛖᛗᛚᛜᛞᛟ";
+
+const RitualCanvas: React.FC<RitualCanvasProps> = ({ target, color, mode }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const particles = useRef<Particle[]>([]);
     const requestRef = useRef<number>();
@@ -55,50 +55,49 @@ const RitualCanvas: React.FC<RitualCanvasProps> = ({ source, target, color, mode
         const animate = () => {
             if (!canvas || !ctx) return;
             
-            // Clear with heavy trail effect for the stream
-            ctx.fillStyle = 'rgba(5, 5, 8, 0.2)'; 
+            // Clear
+            ctx.fillStyle = 'rgba(5, 5, 8, 0.25)'; // Clear trails
             ctx.fillRect(0, 0, canvas.width, canvas.height);
-            ctx.globalCompositeOperation = 'lighter';
+            ctx.globalCompositeOperation = 'lighter'; // Glow effect
 
             const rgb = hexToRgb(color);
             const centerX = target.x * canvas.width;
             const centerY = target.y * canvas.height;
+            const maxRadius = Math.max(canvas.width, canvas.height) / 1.5;
 
             // --- SPAWN LOGIC ---
             if (mode === 'idle') {
-                // Spawn particles on the RING
-                if (particles.current.length < 200) {
+                // Gentle floating dust around the ring
+                if (particles.current.length < 150) {
                     const angle = Math.random() * Math.PI * 2;
-                    // Radius roughly matches the magic circle size (approx 150px-250px)
-                    const radius = 150 + Math.random() * 50; 
+                    const r = 180 + Math.random() * 100; // Ring orbit
                     particles.current.push({
-                        x: centerX + Math.cos(angle) * radius,
-                        y: centerY + Math.sin(angle) * radius,
-                        size: Math.random() * 1.5 + 0.5,
-                        speed: (Math.random() - 0.5) * 0.01,
-                        life: 0,
-                        maxLife: 100 + Math.random() * 100,
-                        vx: 0, vy: 0,
-                        angle: angle,
-                        radius: radius
+                        x: centerX + Math.cos(angle) * r,
+                        y: centerY + Math.sin(angle) * r,
+                        angle,
+                        radius: r,
+                        size: Math.random() * 10 + 10,
+                        char: '.', // Just dots in idle
+                        speed: 0.002,
+                        rotation: 0,
+                        alpha: 0
                     });
                 }
-            } else if (mode === 'stream' && source) {
-                // Spawn high density particles at SOURCE Orb
-                const sourceX = source.x * canvas.width;
-                const sourceY = source.y * canvas.height;
-                
-                // Emit 5 particles per frame for density
-                for(let i=0; i<5; i++) {
+            } else if (mode === 'implode') {
+                // High speed RUNES sucking in
+                for(let i=0; i<4; i++) { // Spawn rate
+                    const angle = Math.random() * Math.PI * 2;
+                    const r = maxRadius; // Start at edge
                     particles.current.push({
-                        x: sourceX + (Math.random() - 0.5) * 40, // Source width jitter
-                        y: sourceY + (Math.random() - 0.5) * 40,
-                        size: Math.random() * 2 + 1,
-                        speed: Math.random() * 0.05 + 0.02, // Travel speed
-                        life: 0,
-                        maxLife: 60, // Short life, fast travel
-                        vx: 0, vy: 0,
-                        angle: 0, radius: 0
+                        x: centerX + Math.cos(angle) * r,
+                        y: centerY + Math.sin(angle) * r,
+                        angle,
+                        radius: r,
+                        size: Math.random() * 15 + 10,
+                        char: RUNES.charAt(Math.floor(Math.random() * RUNES.length)),
+                        speed: 0.03 + Math.random() * 0.02, // Initial speed
+                        rotation: Math.random() * Math.PI * 2,
+                        alpha: 0
                     });
                 }
             }
@@ -108,58 +107,49 @@ const RitualCanvas: React.FC<RitualCanvasProps> = ({ source, target, color, mode
                 const p = particles.current[i];
                 
                 if (mode === 'idle') {
-                    // Orbit Logic
-                    p.angle += 0.005; // Slow rotation
+                    // Slow Orbit
+                    p.angle += p.speed;
+                    p.alpha = Math.min(p.alpha + 0.02, 0.5); // Fade in
+                    p.radius += Math.sin(p.angle * 5) * 0.5; // Wobble
+
                     p.x = centerX + Math.cos(p.angle) * p.radius;
                     p.y = centerY + Math.sin(p.angle) * p.radius;
                     
-                    // Simple shimmer
-                    p.life++;
-                    const alpha = (Math.sin(p.life * 0.05) + 1) / 2 * 0.5;
-                    
+                    // Render Dot
                     ctx.beginPath();
-                    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-                    ctx.fillStyle = `rgba(197, 160, 89, ${alpha})`; // Always gold in idle
+                    ctx.arc(p.x, p.y, 1, 0, Math.PI*2);
+                    ctx.fillStyle = `rgba(197, 160, 89, ${p.alpha})`;
                     ctx.fill();
-
-                } else if (mode === 'stream') {
-                    // Flow Logic: Source -> Center
-                    // We calculate vector to center
-                    const dx = centerX - p.x;
-                    const dy = centerY - p.y;
-                    const dist = Math.sqrt(dx*dx + dy*dy);
                     
-                    if (dist < 10) {
-                        // Reached center - Die
+                    if (Math.random() > 0.99) particles.current.splice(i, 1); // Recycle
+
+                } else if (mode === 'implode') {
+                    // Spiral Inwards with Acceleration
+                    p.angle += 0.05; // Spiral spin
+                    p.speed *= 1.05; // Accelerate as it gets closer
+                    p.radius -= (p.radius * p.speed); // Move in
+                    p.rotation += 0.1; // Self rotate
+                    
+                    p.alpha = Math.min(p.alpha + 0.1, 1);
+                    
+                    p.x = centerX + Math.cos(p.angle) * p.radius;
+                    p.y = centerY + Math.sin(p.angle) * p.radius;
+
+                    // Render Rune
+                    ctx.save();
+                    ctx.translate(p.x, p.y);
+                    ctx.rotate(p.rotation);
+                    ctx.font = `${p.size}px serif`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${p.alpha})`;
+                    ctx.fillText(p.char, 0, 0);
+                    ctx.restore();
+                    
+                    // Kill when close to center (absorbed)
+                    if (p.radius < 40) {
                         particles.current.splice(i, 1);
-                        continue;
                     }
-
-                    // Move towards center with acceleration
-                    p.x += dx * 0.08; 
-                    p.y += dy * 0.08;
-                    
-                    // Add sine wave wiggle perpendicular to path
-                    const perpX = -dy / dist;
-                    const perpY = dx / dist;
-                    const wave = Math.sin(p.life * 0.5) * 5;
-                    p.x += perpX * wave;
-                    p.y += perpY * wave;
-
-                    p.life++;
-                    
-                    // Draw Stream
-                    ctx.beginPath();
-                    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-                    ctx.fillStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.8)`;
-                    ctx.fill();
-                    
-                    // Trail line
-                    ctx.beginPath();
-                    ctx.moveTo(p.x, p.y);
-                    ctx.lineTo(p.x - dx * 0.05, p.y - dy * 0.05);
-                    ctx.strokeStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.4)`;
-                    ctx.stroke();
                 }
             }
 
@@ -173,7 +163,7 @@ const RitualCanvas: React.FC<RitualCanvasProps> = ({ source, target, color, mode
             window.removeEventListener('resize', resize);
             if (requestRef.current) cancelAnimationFrame(requestRef.current);
         };
-    }, [source, target, color, mode]);
+    }, [target, color, mode]);
 
     return (
         <canvas 
