@@ -91,11 +91,10 @@ const Bookshelf: React.FC<BookshelfProps> = ({ onBookSelected }) => {
         setAnimState('opening');
 
         // 3. Trigger the animation to the center next frame
-        // (We need a slight delay to let the modal mount at the source position first)
         requestAnimationFrame(() => {
-            setTimeout(() => {
-                setAnimState('open');
-            }, 50);
+            // Force reflow
+            void document.body.offsetHeight;
+            setAnimState('open');
         });
     };
 
@@ -127,30 +126,36 @@ const Bookshelf: React.FC<BookshelfProps> = ({ onBookSelected }) => {
         if (!sourceRect) return {};
 
         const isOpeningOrClosing = animState === 'opening' || animState === 'closing';
+        const targetWidth = 256; // w-64
+        const targetHeight = 384; // h-96
+
+        // Center position calculation
+        // Note: Using window dimensions can be slightly risky with resize, but fine for this animation
+        const centerLeft = (window.innerWidth - targetWidth) / 2;
+        const centerTop = (window.innerHeight - targetHeight) / 2;
 
         if (isOpeningOrClosing) {
-            // State: AT THE SHELF (Spine View)
-            // We use fixed positioning to match the original spine exactly
+            // State: AT THE SHELF
+            // We set width to FULL TARGET WIDTH (256px) but rotate it 90deg so we only see the spine.
+            // Positioning: The Spine (Left Edge) must align with sourceRect.left
             return {
                 top: `${sourceRect.top}px`,
                 left: `${sourceRect.left}px`,
-                width: `${sourceRect.width}px`,
-                height: `${sourceRect.height}px`,
-                transform: 'rotateY(-90deg) translateZ(0px)', // Spine view rotation
+                width: `${targetWidth}px`, 
+                height: `${sourceRect.height}px`, // Interpolate height from spine height
+                transform: 'translate3d(0,0,0) rotateY(90deg)', // Face the spine to viewer
+                transformOrigin: '0% 50%', // Pivot on left edge
                 zIndex: 60
             };
         } else {
-            // State: CENTERED (Open Book View)
-            // We center it on the screen
-            const targetWidth = 256; // w-64
-            const targetHeight = 384; // h-96
-            
+            // State: CENTERED
             return {
-                top: `calc(50% - ${targetHeight/2}px)`,
-                left: `calc(50% - ${targetWidth/2}px)`,
+                top: `${centerTop}px`,
+                left: `${centerLeft}px`,
                 width: `${targetWidth}px`,
                 height: `${targetHeight}px`,
-                transform: 'rotateY(-10deg) translateZ(0px)', // Slight open angle
+                transform: 'translate3d(0,0,0) rotateY(0deg)', // Face front
+                transformOrigin: '0% 50%',
                 zIndex: 60
             };
         }
@@ -198,7 +203,7 @@ const Bookshelf: React.FC<BookshelfProps> = ({ onBookSelected }) => {
 
             {/* --- THE FLYING BOOK LAYER --- */}
             {selectedBook && (
-                <div className="fixed inset-0 z-50 pointer-events-none">
+                <div className="fixed inset-0 z-50 pointer-events-none perspective-1000">
                     
                     {/* Backdrop (Fades in/out) */}
                     <div 
@@ -224,7 +229,7 @@ const Bookshelf: React.FC<BookshelfProps> = ({ onBookSelected }) => {
                             className="absolute inset-0 rounded-r-md flex flex-col items-center p-6 text-center justify-between backface-hidden overflow-hidden"
                             style={{
                                 backgroundColor: '#1a1412',
-                                transform: 'translateZ(10px)', // Thickness front
+                                transform: 'translateZ(20px)', // Thicker Z (was 10)
                                 boxShadow: 'inset 5px 0 15px rgba(0,0,0,0.8), 10px 10px 30px rgba(0,0,0,0.8)'
                             }}
                         >
@@ -271,7 +276,7 @@ const Bookshelf: React.FC<BookshelfProps> = ({ onBookSelected }) => {
                         </div>
 
                         {/* =======================
-                            VISUAL: SPINE (Visible during flight)
+                            VISUAL: SPINE
                            ======================= */}
                         <div 
                             className="absolute top-0 bottom-0 left-0 bg-[#16100e] transform origin-left rotate-y-[-90deg] flex flex-col items-center justify-center border-l border-white/5 overflow-hidden"
@@ -295,9 +300,9 @@ const Bookshelf: React.FC<BookshelfProps> = ({ onBookSelected }) => {
                             VISUAL: PAGES (Side)
                            ======================= */}
                         <div 
-                            className="absolute top-1 bottom-1 right-0 bg-[#e3dac9] transform origin-right rotate-y-[-90deg] translate-z-[-10px]"
+                            className="absolute top-1 bottom-1 right-0 bg-[#e3dac9] transform origin-right rotate-y-[-90deg] translate-z-[-20px]"
                             style={{
-                                width: '30px',
+                                width: '38px', // Slightly less than 40 to account for cover overlap
                                 backgroundImage: "linear-gradient(to right, #dcd1b4 1px, transparent 1px)",
                                 backgroundSize: "2px 100%"
                             }}
@@ -307,7 +312,7 @@ const Bookshelf: React.FC<BookshelfProps> = ({ onBookSelected }) => {
                             VISUAL: BACK COVER
                            ======================= */}
                         <div 
-                            className="absolute inset-0 bg-[#1a1412] rounded-l-md transform translate-z-[-10px] rotate-y-180"
+                            className="absolute inset-0 bg-[#1a1412] rounded-l-md transform translate-z-[-20px] rotate-y-180"
                             style={{ boxShadow: '0 0 20px rgba(0,0,0,0.5)' }}
                         ></div>
 
