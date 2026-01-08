@@ -89,10 +89,6 @@ const WordCard: React.FC<WordCardProps> = ({ data, onNext, onHard, stackIndex })
   const stackBrightness = stackIndex === 0 ? 1 : 0.5;
 
   // 2. Fly Styles (Action)
-  // Logic: 
-  // If it's a HIDDEN TAROT card, it flies UP to the Top Right (Slots).
-  // If it's a NORMAL WORD, it flies DOWN to the Bottom Right (Pile).
-  
   const isTarot = !!data.hiddenTarot;
   
   // Coordinates for Top Right (Slots) vs Bottom Right (Pile) relative to center
@@ -117,6 +113,14 @@ const WordCard: React.FC<WordCardProps> = ({ data, onNext, onHard, stackIndex })
             pointerEvents: isActive ? 'none' : 'none', 
         }}
     >
+        {/* Inline Style for the Breathing Animation */}
+        <style>{`
+          @keyframes breathe {
+            0%, 100% { transform: scale(1); filter: brightness(1); }
+            50% { transform: scale(1.05); filter: brightness(1.1); }
+          }
+        `}</style>
+
         {/* Card Wrapper - This animates the fly effect */}
         <div 
             className="w-full max-w-md flex-1 relative perspective-1000 mb-8"
@@ -207,75 +211,99 @@ const WordCard: React.FC<WordCardProps> = ({ data, onNext, onHard, stackIndex })
 
 
                 {/* ============================================================
-                    SIDE B: THE REVELATION (背面 - 分情况渲染)
+                    SIDE B: THE REVELATION (背面 - 统一布局)
                    ============================================================ */}
                 <div 
                     className="absolute inset-0 backface-hidden rotate-y-180 bg-obsidian rounded-xl shadow-glow overflow-hidden"
                     style={{ pointerEvents: isFlipped ? 'auto' : 'none' }}
                 >
                      {/* Frame */}
-                    <div className="absolute inset-2 border border-gold/40 rounded-lg pointer-events-none"></div>
-                    <div className="absolute inset-3 border border-gold/20 rounded-md pointer-events-none"></div>
+                    <div className="absolute inset-2 border border-gold/40 rounded-lg pointer-events-none z-20"></div>
 
-                    <div className="w-full h-full relative flex flex-col items-center p-6 z-10">
+                    <div className="w-full h-full relative flex flex-col z-10 p-4">
                         
-                        {/* CONDITIONAL CONTENT: TAROT CARD vs WORD DEFINITION */}
-                        {data.hiddenTarot ? (
-                            // --- CASE 1: FOUND A TAROT CARD! ---
-                            <div className="flex-1 w-full flex flex-col items-center justify-center animate-[pop-in_0.5s]">
-                                <div className="text-gold/50 text-xs uppercase tracking-[0.3em] mb-4">Fate Revealed</div>
-                                
-                                <div 
-                                    className="w-32 h-48 rounded-lg border-2 mb-6 flex flex-col items-center justify-center relative shadow-[0_0_30px_rgba(255,255,255,0.1)]"
-                                    style={{ 
-                                        borderColor: data.hiddenTarot.theme_color,
-                                        backgroundColor: `${data.hiddenTarot.theme_color}20` 
-                                    }}
-                                >
-                                     <div className="text-6xl filter drop-shadow-lg mb-2">{data.hiddenTarot.icon}</div>
-                                     <div className="font-mystic text-lg text-center px-2 leading-none" style={{ color: data.hiddenTarot.theme_color }}>
-                                        {data.hiddenTarot.name}
+                        {/* --- TOP VISUAL SLOT (Flexible but Centered) --- */}
+                        <div className="flex-none h-[45%] w-full flex flex-col items-center justify-center relative mb-2">
+                             
+                             {data.hiddenTarot ? (
+                                 // 1. TAROT VISUAL (Breathing & Flashing)
+                                 <div className="relative flex flex-col items-center">
+                                     {/* Background Flash/Pulse (Subtle Gold) */}
+                                     <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 bg-gold/30 rounded-full blur-[40px] animate-pulse"></div>
+                                     
+                                     {/* The Breathing Card (Sized to fit nicely) */}
+                                     <div 
+                                        className="relative w-28 h-44 rounded-lg border border-gold/50 flex flex-col items-center justify-center bg-midnight/90 shadow-[0_0_25px_rgba(197,160,89,0.3)] overflow-hidden"
+                                        style={{ 
+                                            borderColor: data.hiddenTarot.theme_color,
+                                            animation: 'breathe 4s ease-in-out infinite' 
+                                        }}
+                                     >
+                                        <div className="absolute inset-1 border border-white/10 rounded-md"></div>
+                                        <div className="text-5xl filter drop-shadow-lg mb-2 relative z-10">{data.hiddenTarot.icon}</div>
+                                        <div className="font-mystic text-[10px] uppercase tracking-widest px-1 text-center" style={{ color: data.hiddenTarot.theme_color }}>
+                                            {data.hiddenTarot.name}
+                                        </div>
+                                        {/* Shimmer */}
+                                        <div className="absolute inset-0 bg-gradient-to-tr from-white/0 via-white/10 to-white/0 animate-[shimmer_3s_infinite] pointer-events-none"></div>
                                      </div>
-                                </div>
 
-                                <p className="text-sm font-serif text-parchment/80 text-center italic max-w-[90%]">
-                                    "{data.hiddenTarot.fortune_text}"
-                                </p>
+                                     {/* Label */}
+                                     <div className="text-[9px] text-gold uppercase tracking-[0.3em] mt-3 animate-pulse">
+                                         Fate Revealed
+                                     </div>
+                                 </div>
+                             ) : (
+                                 // 2. NORMAL VISUAL (Static Icon)
+                                 <div className="w-24 h-24 rounded-full border border-gold/20 flex items-center justify-center relative">
+                                     <div className="absolute inset-0 bg-gold/5 rounded-full blur-xl animate-pulse"></div>
+                                     <span className="text-5xl filter drop-shadow-lg relative z-10 text-gold opacity-80">📜</span>
+                                 </div>
+                             )}
 
-                                <div className="mt-auto mb-4 text-xs text-gold/60 font-bold uppercase tracking-widest animate-pulse">
-                                    Card Collected
-                                </div>
+                        </div>
+
+                        {/* --- BOTTOM TEXT SLOT (Unified Structure) --- */}
+                        {/* Ensure consistency: same padding, same alignment for definition */}
+                        <div className="flex-1 w-full flex flex-col items-center justify-start text-center relative z-10 -mt-2">
+                            
+                            {/* Word & Phonetic */}
+                            <div className="mb-4">
+                                <h2 className="text-2xl font-mystic text-parchment tracking-wider mb-1">{data.word}</h2>
+                                <span className="text-[10px] text-white/40 font-mono tracking-widest">{data.phonetic}</span>
                             </div>
-                        ) : (
-                            // --- CASE 2: NORMAL WORD DEFINITION ---
-                            <div className="flex-1 w-full flex flex-col items-center justify-center">
-                                <div className="w-20 h-20 rounded-full border border-gold/30 flex items-center justify-center mb-4 relative">
-                                    <div className="absolute inset-0 bg-gold/10 rounded-full blur-xl animate-pulse"></div>
-                                    <span className="text-4xl filter drop-shadow-lg relative z-10 text-gold">📜</span>
-                                </div>
-                                <h2 className="text-2xl font-mystic text-parchment mb-4 tracking-wider">{data.word}</h2>
-                                
-                                <div className="relative py-3 px-8 mb-4 border-t border-b border-gold/30 w-full text-center bg-gold/5">
-                                    <span className="text-3xl font-bold font-serif text-gold text-glow">
-                                        {data.etymology_story.modern_meaning.split(' ')[1] || data.etymology_story.modern_meaning}
-                                    </span>
-                                </div>
+                            
+                            {/* Definition Box */}
+                            <div className="relative w-full py-3 px-4 mb-4 border-t border-b border-gold/20 bg-gold/5 backdrop-blur-sm">
+                                <span className="text-2xl font-bold font-serif text-gold text-glow block">
+                                    {data.etymology_story.modern_meaning.split(' ')[1] || data.etymology_story.modern_meaning}
+                                </span>
+                            </div>
 
-                                <p className="text-sm font-serif text-parchment/70 text-center leading-relaxed italic max-w-[90%] mb-4">
+                            {/* Nuance / Fortune */}
+                            <div className="w-full px-4">
+                                <p className="text-xs font-serif text-parchment/70 leading-relaxed italic">
                                     "{data.nuance.split('。')[0]}。"
                                 </p>
-                                
-                                <button 
-                                    onClick={(e) => { e.stopPropagation(); setShowChat(true); }}
-                                    className="text-xs text-gold/50 hover:text-gold flex items-center gap-1 border border-gold/20 px-3 py-1 rounded-full hover:bg-gold/10 transition-all z-20"
-                                >
-                                    <span>🔮</span> Ask Oracle
-                                </button>
+                                {/* If Tarot, show a tiny extra hint, but don't break layout */}
+                                {data.hiddenTarot && (
+                                    <div className="mt-2 text-[9px] text-gold/50 font-mystic tracking-wider border border-gold/10 rounded-full px-2 py-0.5 inline-block">
+                                        ✦ {data.hiddenTarot.meaning} ✦
+                                    </div>
+                                )}
                             </div>
-                        )}
 
-                        {/* DECISION BUTTONS (Always present) */}
-                        <div className="w-full pb-2 pt-4 border-t border-gold/10 flex justify-between items-end gap-4 relative z-20">
+                            {/* Ask Oracle Button */}
+                             <button 
+                                onClick={(e) => { e.stopPropagation(); setShowChat(true); }}
+                                className="mt-auto mb-2 text-[10px] text-gold/40 hover:text-gold flex items-center gap-1 border border-gold/10 px-3 py-1 rounded-full hover:bg-gold/5 transition-all"
+                            >
+                                <span>🔮</span> Ask Oracle
+                            </button>
+                        </div>
+
+                        {/* DECISION BUTTONS (Always present at bottom) */}
+                        <div className="w-full pt-2 border-t border-gold/10 flex justify-between items-end gap-4 mt-auto">
                             
                             {/* FORGET */}
                             <button 
@@ -285,10 +313,10 @@ const WordCard: React.FC<WordCardProps> = ({ data, onNext, onHard, stackIndex })
                                 }}
                                 className="flex-1 group flex flex-col items-center gap-2 py-2 rounded-lg hover:bg-white/5 transition-all cursor-pointer"
                             >
-                                <div className="w-12 h-12 rounded-full border border-alchemist/50 text-alchemist bg-midnight shadow-[0_0_15px_rgba(138,35,35,0.1)] flex items-center justify-center group-hover:scale-110 group-hover:bg-alchemist group-hover:text-white transition-all duration-300">
-                                    <span className="text-lg">⚡</span>
+                                <div className="w-10 h-10 rounded-full border border-alchemist/50 text-alchemist bg-midnight shadow-[0_0_15px_rgba(138,35,35,0.1)] flex items-center justify-center group-hover:scale-110 group-hover:bg-alchemist group-hover:text-white transition-all duration-300">
+                                    <span className="text-base">⚡</span>
                                 </div>
-                                <span className="text-[10px] font-mystic text-alchemist/70 tracking-[0.2em] group-hover:text-alchemist">FORGET</span>
+                                <span className="text-[9px] font-mystic text-alchemist/70 tracking-[0.2em] group-hover:text-alchemist">FORGET</span>
                             </button>
 
                             {/* REMEMBER */}
@@ -299,12 +327,12 @@ const WordCard: React.FC<WordCardProps> = ({ data, onNext, onHard, stackIndex })
                                 }}
                                 className="flex-1 group flex flex-col items-center gap-2 py-2 rounded-lg hover:bg-white/5 transition-all cursor-pointer"
                             >
-                                <div className="w-12 h-12 rounded-full border border-gold/50 text-gold bg-midnight shadow-[0_0_15px_rgba(197,160,89,0.1)] flex items-center justify-center group-hover:scale-110 group-hover:bg-gold group-hover:text-midnight transition-all duration-300">
-                                    <span className="text-lg">
+                                <div className="w-10 h-10 rounded-full border border-gold/50 text-gold bg-midnight shadow-[0_0_15px_rgba(197,160,89,0.1)] flex items-center justify-center group-hover:scale-110 group-hover:bg-gold group-hover:text-midnight transition-all duration-300">
+                                    <span className="text-base">
                                         {data.hiddenTarot ? '🌟' : '🧠'}
                                     </span>
                                 </div>
-                                <span className="text-[10px] font-mystic text-gold/70 tracking-[0.2em] group-hover:text-gold">
+                                <span className="text-[9px] font-mystic text-gold/70 tracking-[0.2em] group-hover:text-gold">
                                     {data.hiddenTarot ? 'COLLECT' : 'REMEMBER'}
                                 </span>
                             </button>

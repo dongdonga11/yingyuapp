@@ -54,6 +54,20 @@
                 '0%, 100%': { transform: 'translateX(0)' },
                 '25%': { transform: 'translateX(-2px)' },
                 '75%': { transform: 'translateX(2px)' },
+              },
+              'nebula-flow': {
+                '0%': { backgroundPosition: '0% 50%' },
+                '50%': { backgroundPosition: '100% 50%' },
+                '100%': { backgroundPosition: '0% 50%' },
+              },
+              'beam-grow': {
+                '0%': { height: '0%', opacity: '0' },
+                '100%': { height: '50%', opacity: '1' },
+              },
+              'white-out': {
+                '0%': { opacity: '0' },
+                '10%': { opacity: '1' },
+                '100%': { opacity: '0' },
               }
             },
             animation: {
@@ -62,6 +76,8 @@
               'unroll': 'unroll 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) forwards',
               'float': 'float 3s ease-in-out infinite',
               'shake': 'shake 0.2s ease-in-out infinite',
+              'nebula-flow': 'nebula-flow 8s ease infinite',
+              'white-out': 'white-out 1.5s ease-out forwards',
             }
           },
         },
@@ -107,6 +123,9 @@
       /* Text Glow Utility */
       .text-glow {
         text-shadow: 0 0 10px rgba(197, 160, 89, 0.3);
+      }
+      .text-glow-strong {
+        text-shadow: 0 0 20px rgba(255, 255, 255, 0.8), 0 0 40px rgba(197, 160, 89, 0.6);
       }
     </style>
   <script type="importmap">
