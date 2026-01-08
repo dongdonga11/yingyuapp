@@ -1,42 +1,82 @@
 import React, { useEffect, useRef } from 'react';
 
 interface RitualCanvasProps {
-    target: { x: number, y: number }; // Normalized center (usually 0.5, 0.5)
-    color: string;
-    mode: 'idle' | 'implode'; // 'implode' sucks particles INTO the center
+    target: { x: number, y: number } | null; // Normalized 0-1 coordinates
+    // We ignore the 'color' prop now to enforce the Golden Stardust aesthetic as requested.
+    mode: 'idle' | 'congregate'; // Behavior state
 }
 
 interface Particle {
     x: number;
     y: number;
-    size: number;
-    char: string; // Rune character
+    z: number; // Depth
     
-    // Physics
-    angle: number;
-    radius: number;
-    speed: number;
-    rotation: number;
+    // Physics State
+    baseX: number; // Original position for noise calc
+    baseY: number;
+    driftSpeed: number;
+    driftAngle: number;
     
     // Appearance
-    alpha: number;
+    color: { r: number, g: number, b: number };
+    baseSize: number;
+    alphaBase: number; // Base brightness
+    pulseOffset: number;
+    pulseSpeed: number;
+    
+    // Vortex State
+    angle: number;
+    radius: number;
+    angularVelocity: number;
 }
 
-const RUNES = "ᚠᚢᚦᚨᚱᚲᚷᚹᚺᚾᛁᛃᛇᛈᛉᛊᛏᛒᛖᛗᛚᛜᛞᛟ";
+const GOLD_PALETTE = [
+    { r: 255, g: 255, b: 255 }, // White Gold (Sparkle)
+    { r: 252, g: 211, b: 77 },  // Light Amber
+    { r: 245, g: 158, b: 11 },  // Deep Amber
+    { r: 197, g: 160, b: 89 },  // Classic Parchment Gold
+    { r: 255, g: 215, b: 0 },   // Pure Gold
+];
 
-const RitualCanvas: React.FC<RitualCanvasProps> = ({ target, color, mode }) => {
+const RitualCanvas: React.FC<RitualCanvasProps> = ({ target, mode }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const particles = useRef<Particle[]>([]);
     const requestRef = useRef<number>();
-    
-    // Hex to RGB helper
-    const hexToRgb = (hex: string) => {
-        const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-        return result ? {
-            r: parseInt(result[1], 16),
-            g: parseInt(result[2], 16),
-            b: parseInt(result[3], 16)
-        } : { r: 197, g: 160, b: 89 };
+    const timeRef = useRef(0);
+
+    const initParticles = (width: number, height: number) => {
+        const p: Particle[] = [];
+        // Increase count for a denser "dust" feel
+        const count = width < 768 ? 600 : 1200; 
+        
+        for (let i = 0; i < count; i++) {
+            // Pick a random gold color
+            const color = GOLD_PALETTE[Math.floor(Math.random() * GOLD_PALETTE.length)];
+            
+            p.push({
+                x: (Math.random() - 0.5) * width * 1.5,
+                y: (Math.random() - 0.5) * height * 1.5,
+                z: Math.random() * 2000, // Deep depth field
+                
+                baseX: (Math.random() - 0.5) * width * 1.5,
+                baseY: (Math.random() - 0.5) * height * 1.5,
+                driftSpeed: Math.random() * 0.5 + 0.1,
+                driftAngle: Math.random() * Math.PI * 2,
+                
+                // Varied sizes: Lots of tiny dust, few large bokeh flares
+                baseSize: Math.random() > 0.9 ? Math.random() * 3 + 2 : Math.random() * 1.5 + 0.5,
+                
+                color: color,
+                alphaBase: Math.random() * 0.8 + 0.2,
+                pulseOffset: Math.random() * Math.PI * 2,
+                pulseSpeed: 0.02 + Math.random() * 0.03,
+                
+                angle: 0,
+                radius: 0,
+                angularVelocity: 0
+            });
+        }
+        return p;
     };
 
     useEffect(() => {
@@ -52,106 +92,109 @@ const RitualCanvas: React.FC<RitualCanvasProps> = ({ target, color, mode }) => {
         window.addEventListener('resize', resize);
         resize();
 
+        if (particles.current.length === 0) {
+            particles.current = initParticles(canvas.width, canvas.height);
+        }
+
         const animate = () => {
             if (!canvas || !ctx) return;
-            
-            // Clear
-            ctx.fillStyle = 'rgba(5, 5, 8, 0.25)'; // Clear trails
+            timeRef.current += 0.01;
+
+            // Deep space background clear
+            ctx.fillStyle = '#050508'; 
             ctx.fillRect(0, 0, canvas.width, canvas.height);
-            ctx.globalCompositeOperation = 'lighter'; // Glow effect
+            
+            // Magical Glow Blend Mode
+            ctx.globalCompositeOperation = 'lighter';
 
-            const rgb = hexToRgb(color);
-            const centerX = target.x * canvas.width;
-            const centerY = target.y * canvas.height;
-            const maxRadius = Math.max(canvas.width, canvas.height) / 1.5;
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            const focalLength = 800;
+            const targetX = target ? (target.x * canvas.width) - centerX : 0;
+            const targetY = target ? (target.y * canvas.height) - centerY : 0;
 
-            // --- SPAWN LOGIC ---
-            if (mode === 'idle') {
-                // Gentle floating dust around the ring
-                if (particles.current.length < 150) {
-                    const angle = Math.random() * Math.PI * 2;
-                    const r = 180 + Math.random() * 100; // Ring orbit
-                    particles.current.push({
-                        x: centerX + Math.cos(angle) * r,
-                        y: centerY + Math.sin(angle) * r,
-                        angle,
-                        radius: r,
-                        size: Math.random() * 10 + 10,
-                        char: '.', // Just dots in idle
-                        speed: 0.002,
-                        rotation: 0,
-                        alpha: 0
-                    });
-                }
-            } else if (mode === 'implode') {
-                // High speed RUNES sucking in
-                for(let i=0; i<4; i++) { // Spawn rate
-                    const angle = Math.random() * Math.PI * 2;
-                    const r = maxRadius; // Start at edge
-                    particles.current.push({
-                        x: centerX + Math.cos(angle) * r,
-                        y: centerY + Math.sin(angle) * r,
-                        angle,
-                        radius: r,
-                        size: Math.random() * 15 + 10,
-                        char: RUNES.charAt(Math.floor(Math.random() * RUNES.length)),
-                        speed: 0.03 + Math.random() * 0.02, // Initial speed
-                        rotation: Math.random() * Math.PI * 2,
-                        alpha: 0
-                    });
-                }
-            }
-
-            // --- UPDATE & DRAW ---
-            for (let i = particles.current.length - 1; i >= 0; i--) {
-                const p = particles.current[i];
+            particles.current.forEach(p => {
                 
                 if (mode === 'idle') {
-                    // Slow Orbit
-                    p.angle += p.speed;
-                    p.alpha = Math.min(p.alpha + 0.02, 0.5); // Fade in
-                    p.radius += Math.sin(p.angle * 5) * 0.5; // Wobble
-
-                    p.x = centerX + Math.cos(p.angle) * p.radius;
-                    p.y = centerY + Math.sin(p.angle) * p.radius;
+                    // --- IDLE: ORGANIC TURBULENCE ---
+                    // Simulate floating dust using Perlin-like noise (Sum of Sines)
                     
-                    // Render Dot
+                    // Complex wave motion
+                    const noiseX = Math.sin(timeRef.current * p.driftSpeed + p.baseY * 0.005);
+                    const noiseY = Math.cos(timeRef.current * p.driftSpeed * 0.8 + p.baseX * 0.005);
+                    
+                    p.x += noiseX * 0.5;
+                    p.y += noiseY * 0.5 - 0.2; // Slight upward drift (heat rises)
+                    
+                    // Gentle Z drift
+                    p.z -= 0.5; 
+                    if (p.z < -500) p.z = 2000; // Loop z-axis
+
+                    // Wrap X/Y if they drift too far
+                    if (p.x > canvas.width) p.x = -canvas.width;
+                    if (p.x < -canvas.width) p.x = canvas.width;
+                    if (p.y > canvas.height) p.y = -canvas.height;
+                    if (p.y < -canvas.height) p.y = canvas.height;
+
+                } else if (mode === 'congregate') {
+                    // --- CONGREGATE: VIOLENT VORTEX ---
+                    
+                    if (p.radius === 0) {
+                        // Init vortex
+                        const dx = p.x - targetX;
+                        const dy = p.y - targetY;
+                        p.radius = Math.sqrt(dx*dx + dy*dy);
+                        p.angle = Math.atan2(dy, dx);
+                        // Random speed for chaos
+                        p.angularVelocity = 0.05 + (Math.random() * 0.08); 
+                    }
+
+                    // Physics
+                    p.angularVelocity *= 1.03; // Accelerate
+                    p.angle += p.angularVelocity;
+                    p.radius *= 0.92; // Tighten spiral
+                    
+                    // Spiral calculation
+                    const jitter = (Math.random() - 0.5) * (p.radius * 0.1); // Add chaos
+                    p.x = targetX + Math.cos(p.angle) * (p.radius + jitter);
+                    p.y = targetY + Math.sin(p.angle) * (p.radius + jitter);
+                    
+                    // Suck into screen plane
+                    p.z = p.z * 0.9;
+                } else {
+                    p.radius = 0;
+                }
+
+                // --- RENDER ---
+                const scale = focalLength / (focalLength + p.z);
+                const screenX = centerX + p.x * scale;
+                const screenY = centerY + p.y * scale;
+
+                // Cull out of bounds
+                if (p.z > -focalLength && screenX > -50 && screenX < canvas.width + 50 && screenY > -50 && screenY < canvas.height + 50) {
+                    
+                    // Twinkle logic
+                    const pulse = Math.sin(timeRef.current * 2 + p.pulseOffset);
+                    // Depth cue: Far particles are dimmer
+                    const depthAlpha = Math.min(1, Math.max(0.1, scale * 1.5)); 
+                    const alpha = p.alphaBase * depthAlpha * (0.8 + pulse * 0.2);
+
+                    const size = p.baseSize * scale;
+
                     ctx.beginPath();
-                    ctx.arc(p.x, p.y, 1, 0, Math.PI*2);
-                    ctx.fillStyle = `rgba(197, 160, 89, ${p.alpha})`;
+                    ctx.arc(screenX, screenY, size, 0, Math.PI * 2);
+                    ctx.fillStyle = `rgba(${p.color.r}, ${p.color.g}, ${p.color.b}, ${alpha})`;
                     ctx.fill();
-                    
-                    if (Math.random() > 0.99) particles.current.splice(i, 1); // Recycle
 
-                } else if (mode === 'implode') {
-                    // Spiral Inwards with Acceleration
-                    p.angle += 0.05; // Spiral spin
-                    p.speed *= 1.05; // Accelerate as it gets closer
-                    p.radius -= (p.radius * p.speed); // Move in
-                    p.rotation += 0.1; // Self rotate
-                    
-                    p.alpha = Math.min(p.alpha + 0.1, 1);
-                    
-                    p.x = centerX + Math.cos(p.angle) * p.radius;
-                    p.y = centerY + Math.sin(p.angle) * p.radius;
-
-                    // Render Rune
-                    ctx.save();
-                    ctx.translate(p.x, p.y);
-                    ctx.rotate(p.rotation);
-                    ctx.font = `${p.size}px serif`;
-                    ctx.textAlign = 'center';
-                    ctx.textBaseline = 'middle';
-                    ctx.fillStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${p.alpha})`;
-                    ctx.fillText(p.char, 0, 0);
-                    ctx.restore();
-                    
-                    // Kill when close to center (absorbed)
-                    if (p.radius < 40) {
-                        particles.current.splice(i, 1);
+                    // Optional: Blur/Glow for large, close particles (Bokeh)
+                    if (size > 3) {
+                         ctx.shadowBlur = 10;
+                         ctx.shadowColor = `rgba(${p.color.r}, ${p.color.g}, ${p.color.b}, 0.5)`;
+                         ctx.fill();
+                         ctx.shadowBlur = 0;
                     }
                 }
-            }
+            });
 
             ctx.globalCompositeOperation = 'source-over';
             requestRef.current = requestAnimationFrame(animate);
@@ -163,12 +206,12 @@ const RitualCanvas: React.FC<RitualCanvasProps> = ({ target, color, mode }) => {
             window.removeEventListener('resize', resize);
             if (requestRef.current) cancelAnimationFrame(requestRef.current);
         };
-    }, [target, color, mode]);
+    }, [target, mode]);
 
     return (
         <canvas 
             ref={canvasRef} 
-            className="absolute inset-0 w-full h-full pointer-events-none z-10"
+            className="absolute inset-0 w-full h-full pointer-events-none z-0"
         />
     );
 };

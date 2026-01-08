@@ -9,7 +9,6 @@ import NavBar from './components/NavBar';
 import Profile from './components/Profile';
 import StartScreen from './components/StartScreen';
 import RitualCanvas from './components/RitualCanvas';
-import MagicArray from './components/MagicArray';
 import { initialVocabulary } from './data/vocabulary';
 import { TAROT_DECK } from './data/tarot'; 
 import { getProphecy } from './data/tarot';
@@ -18,7 +17,7 @@ import { WordData, TarotArcana, DailyProphecy, OracleTopic, TarotReadingResponse
 
 // Tab Logic Type
 type MainTab = 'oracle' | 'grimoire' | 'profile';
-type RitualStage = 'selection' | 'channeling' | 'revelation';
+type RitualStage = 'selection' | 'congregation' | 'revelation';
 
 const App: React.FC = () => {
   const [appState, setAppState] = useState<AppState>('library'); // Internal Flow State
@@ -53,7 +52,14 @@ const App: React.FC = () => {
   const [ritualStage, setRitualStage] = useState<RitualStage>('selection');
   const [oracleTopic, setOracleTopic] = useState<OracleTopic | null>(null);
   const [oracleResult, setOracleResult] = useState<TarotReadingResponse | null>(null);
-  const [showFlash, setShowFlash] = useState(false); 
+  const [showFlash, setShowFlash] = useState(false); // For the white-out effect
+  
+  // Ritual Visual State
+  const [hoveredTopic, setHoveredTopic] = useState<OracleTopic | null>(null);
+  // Coordinates for the particle attractor (0-1 normalized)
+  const [particleTarget, setParticleTarget] = useState<{x: number, y: number} | null>(null);
+  
+  // Share State
   const [showShareCard, setShowShareCard] = useState(false);
 
   // --- TAB SWITCHING HANDLER ---
@@ -154,28 +160,41 @@ const App: React.FC = () => {
       setRitualStage('selection'); 
       setOracleTopic(null);
       setOracleResult(null);
+      setHoveredTopic(null);
+      setParticleTarget(null);
   };
 
   // --- RITUAL LOGIC ---
 
   const topicConfig = {
-      love: { color: '#4ADE80', label: 'Love', icon: '💘', id: 'love' },
-      wealth: { color: '#FBBF24', label: 'Wealth', icon: '💰', id: 'wealth' },
-      decision: { color: '#60A5FA', label: 'Logic', icon: '⚔️', id: 'decision' },
-      energy: { color: '#F87171', label: 'Energy', icon: '🔥', id: 'energy' },
+      love: { color: '#E0115F', label: 'Love', icon: '💘', x: 0.3, y: 0.35, desc: "Bonds of the Heart" },
+      wealth: { color: '#FFD700', label: 'Wealth', icon: '💰', x: 0.7, y: 0.35, desc: "Fortune & Career" },
+      decision: { color: '#00FFFF', label: 'Challenge', icon: '⚔️', x: 0.3, y: 0.65, desc: "The Crossroads" },
+      energy: { color: '#7851A9', label: 'Destiny', icon: '🌟', x: 0.7, y: 0.65, desc: "Cosmic Flow" },
+  };
+
+  const handleHoverTopic = (topic: OracleTopic | null) => {
+      if (ritualStage !== 'selection') return;
+      setHoveredTopic(topic);
+      // NOTE: We REMOVED the logic that sets particleTarget on hover.
+      // We want particles to stay scattered (Idle) until the CLICK happens.
+      // The riot should be sudden!
   };
 
   const handleSelectTopic = async (topic: OracleTopic) => {
       if (ritualStage !== 'selection') return;
       
       setOracleTopic(topic);
-      // Wait a tiny bit for the click animation
-      setTimeout(() => setRitualStage('channeling'), 100);
+      setRitualStage('congregation'); // Triggers the Vortex
+      
+      // NOW we set the target, causing the scattered particles to suddenly swirl in
+      setParticleTarget({ x: topicConfig[topic].x, y: topicConfig[topic].y });
 
-      // 3 seconds of Channeling (Spinning Array + Runes)
+      // The vortex needs time to tighten.
+      // 2 seconds of swirling, then Flash.
       setTimeout(() => {
           setShowFlash(true); // White out
-      }, 3000);
+      }, 2000);
 
       // Trigger API in background
       const result = await getOracleReading(readingCards, topic);
@@ -185,7 +204,7 @@ const App: React.FC = () => {
           setOracleResult(result);
           setRitualStage('revelation');
           setShowFlash(false);
-      }, 4500); 
+      }, 3500); // 2s vortex + 1.5s flash duration logic
   };
 
   const handleReset = () => {
@@ -197,6 +216,71 @@ const App: React.FC = () => {
       setOracleResult(null);
       setShowShareCard(false);
       setShowFlash(false);
+  };
+
+  // --- COMPONENT: RITUAL CARD (Floating Arcana) ---
+  const RitualCard = ({ topic }: { topic: OracleTopic }) => {
+      const config = topicConfig[topic];
+      const isSelected = oracleTopic === topic;
+      const isHovered = hoveredTopic === topic;
+      const isDimmed = hoveredTopic && hoveredTopic !== topic && ritualStage === 'selection';
+      const isHidden = oracleTopic && oracleTopic !== topic && ritualStage === 'congregation';
+      
+      // Position Logic
+      const stylePosition = {
+          left: `${config.x * 100}%`,
+          top: `${config.y * 100}%`,
+      };
+
+      return (
+          <div 
+            className={`
+                absolute w-32 h-48 -translate-x-1/2 -translate-y-1/2 transition-all duration-700 preserve-3d cursor-pointer
+                ${isHidden ? 'opacity-0 scale-50 pointer-events-none' : 'opacity-100'}
+                ${isSelected && ritualStage === 'congregation' ? 'animate-absorb z-[60]' : 'z-20'} 
+                ${isDimmed ? 'opacity-30 scale-90 blur-sm' : ''}
+                ${isHovered ? 'scale-110' : 'animate-float'}
+            `}
+            style={stylePosition}
+            onMouseEnter={() => handleHoverTopic(topic)}
+            onMouseLeave={() => handleHoverTopic(null)}
+            onClick={() => handleSelectTopic(topic)}
+          >
+               {/* Card Back Visual */}
+               <div 
+                 className={`
+                    absolute inset-0 bg-midnight border rounded-lg shadow-2xl overflow-hidden flex flex-col items-center justify-center
+                    transition-all duration-500
+                 `}
+                 style={{ 
+                     borderColor: config.color,
+                     boxShadow: isHovered || isSelected ? `0 0 50px ${config.color}90` : `0 0 15px ${config.color}30`
+                 }}
+               >
+                   {/* Pattern */}
+                   <div className="absolute inset-0 opacity-20 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')]"></div>
+                   
+                   {/* Icon */}
+                   <div className="text-4xl filter drop-shadow-lg z-10 transition-transform duration-500" style={{ transform: isHovered ? 'scale(1.2)' : 'scale(1)' }}>
+                       {config.icon}
+                   </div>
+                   
+                   {/* Label */}
+                   <div 
+                    className="absolute bottom-4 font-mystic text-xs uppercase tracking-[0.2em]" 
+                    style={{ color: config.color }}
+                   >
+                       {config.label}
+                   </div>
+
+                   {/* Energy Core (Glowing center) */}
+                   <div 
+                    className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500"
+                    style={{ background: `radial-gradient(circle, ${config.color}20 0%, transparent 70%)` }}
+                   ></div>
+               </div>
+          </div>
+      );
   };
 
   // --- RENDER CONTENT ---
@@ -253,110 +337,115 @@ const App: React.FC = () => {
       }
 
       // =========================================================================
-      // THE MAGIC ARRAY RITUAL (CARD INSERTION MODE)
+      // THE NEW ASTRAL RITUAL (VORTEX EDITION)
       // =========================================================================
       if (appState === 'oracle_reading') {
          
-         const activeColor = oracleTopic ? topicConfig[oracleTopic].color : '#C5A059';
+         // determine active particle color
+         const activeColor = hoveredTopic ? topicConfig[hoveredTopic].color : 
+                             oracleTopic ? topicConfig[oracleTopic].color : 
+                             '#C5A059';
 
          return (
-            <div className="absolute inset-0 z-[50] bg-[#050508] flex flex-col items-center justify-center overflow-hidden animate-fade-in">
+            <div className="absolute inset-0 z-[50] bg-[#050508] flex flex-col overflow-hidden animate-fade-in">
               
-              {/* Background */}
-              <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-purple-900/20 via-[#050508] to-black z-0"></div>
-              <div className="absolute inset-0 opacity-30 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] z-0"></div>
-
               {/* 1. White Out Flash */}
               {showFlash && (
                   <div className="absolute inset-0 z-[999] bg-white animate-white-out pointer-events-none"></div>
               )}
 
-              {/* 2. Particle Canvas (Runes Implosion) */}
+              {/* 2. Particle Canvas (Background Layer) */}
+              {/* Note: mode is 'idle' until we actually SELECT a topic. Hover doesn't trigger swarm anymore. */}
               <RitualCanvas 
-                  target={{x: 0.5, y: 0.5}} 
+                  target={particleTarget} 
                   color={activeColor}
-                  mode={ritualStage === 'channeling' ? 'implode' : 'idle'}
+                  mode={ritualStage === 'selection' ? 'idle' : 'congregate'}
               />
 
-              {/* 3. The Central Magic Array & Card Slot */}
-              <div className="relative z-10 mb-20">
-                  <MagicArray isActive={ritualStage === 'channeling'}>
-                      {/* CARD IN THE CENTER */}
-                      {oracleTopic && (
-                          <div 
-                            className={`
-                                w-32 h-48 rounded-lg border border-gold/50 bg-midnight shadow-[0_0_30px_currentColor] flex flex-col items-center justify-center relative overflow-hidden
-                                ${ritualStage === 'channeling' ? 'animate-fly-center' : 'opacity-0'}
-                            `}
-                            style={{ color: activeColor }}
-                          >
-                               <div className="absolute inset-0 bg-gold/10 mix-blend-overlay"></div>
-                               <div className="text-4xl filter drop-shadow-md">{topicConfig[oracleTopic].icon}</div>
-                               <div className="absolute bottom-4 font-mystic text-xs tracking-widest uppercase">{topicConfig[oracleTopic].label}</div>
-                               {/* Energy beams */}
-                               <div className="absolute inset-0 bg-gradient-to-t from-transparent via-white/10 to-transparent animate-[shimmer_2s_infinite]"></div>
-                          </div>
-                      )}
-                  </MagicArray>
-              </div>
-
               {/* Top Bar */}
-              <div className="absolute top-0 w-full flex justify-between items-center p-6 z-40">
-                  <h3 className="font-mystic text-white/30 tracking-widest text-xs">THE ELEMENTAL GATE</h3>
+              <div className="flex-none flex justify-between items-center p-6 z-40 relative">
+                  <h3 className="font-mystic text-white/30 tracking-widest text-xs">THE ASTRAL VOID</h3>
                   <button onClick={handleReset} className="text-white/20 hover:text-white">✕</button>
               </div>
 
-              {/* STAGE A: SELECTION (Bottom Deck) */}
+              {/* STAGE A: SELECTION & CONGREGATION */}
               {ritualStage !== 'revelation' && (
-                  <div className={`absolute bottom-8 left-0 right-0 flex justify-center gap-4 z-20 transition-all duration-700 ${ritualStage === 'channeling' ? 'translate-y-40 opacity-0' : 'translate-y-0 opacity-100'}`}>
-                      {(['love', 'wealth', 'decision', 'energy'] as OracleTopic[]).map((key) => {
-                          const config = topicConfig[key];
-                          return (
-                              <div 
-                                key={key}
-                                onClick={() => handleSelectTopic(key)}
-                                className="w-20 h-32 bg-obsidian border border-gold/30 rounded cursor-pointer hover:-translate-y-4 hover:border-gold hover:shadow-[0_0_20px_rgba(197,160,89,0.3)] transition-all duration-300 flex flex-col items-center justify-center group"
-                              >
-                                  <div className="text-2xl mb-2 grayscale group-hover:grayscale-0 transition-all">{config.icon}</div>
-                                  <span className="font-mystic text-[10px] text-gold/50 group-hover:text-gold uppercase tracking-wider">{config.label}</span>
-                              </div>
-                          )
-                      })}
+                  <div className="flex-1 w-full h-full relative perspective-1000">
+                      
+                      {/* Floating Cards Array */}
+                      <RitualCard topic="love" />
+                      <RitualCard topic="wealth" />
+                      <RitualCard topic="decision" />
+                      <RitualCard topic="energy" />
+
+                      {/* Text Hint */}
+                      <div className="absolute bottom-20 w-full text-center pointer-events-none transition-opacity duration-500" style={{ opacity: hoveredTopic ? 1 : 0.5 }}>
+                          <h2 className="font-mystic text-lg tracking-[0.2em] mb-1" style={{ color: activeColor }}>
+                              {hoveredTopic ? topicConfig[hoveredTopic].label.toUpperCase() : "WHERE DOES YOUR INTUITION GUIDE YOU?"}
+                          </h2>
+                          {hoveredTopic && (
+                              <p className="text-white/50 text-[10px] uppercase tracking-widest font-serif italic">
+                                  {topicConfig[hoveredTopic].desc}
+                              </p>
+                          )}
+                      </div>
                   </div>
               )}
 
               {/* STAGE B: REVELATION (Result) */}
               {ritualStage === 'revelation' && oracleResult && (
-                  <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black/80 backdrop-blur-xl animate-fade-in p-6">
+                  <div className="flex-1 w-full relative z-20 flex flex-col items-center animate-fade-in h-full">
                       
-                      {/* Result Scroll */}
-                      <div className="w-full max-w-md bg-black/90 border border-gold/30 rounded-xl p-6 shadow-2xl overflow-y-auto max-h-full custom-scrollbar animate-pop-in">
-                          <div className="text-center mb-6">
-                              <h2 className="font-mystic text-xl text-gold mb-2 text-glow">{oracleResult.synthesis_title}</h2>
-                              <div className="w-16 h-[1px] bg-gold/50 mx-auto"></div>
-                          </div>
+                      {/* Wizard/Void Background */}
+                      <div className="absolute inset-0 z-0">
+                           {/* Mystic Glow */}
+                           <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-full h-[70%] bg-gradient-to-t from-purple-900/30 to-transparent blur-3xl"></div>
+                           {/* Wizard Silhouette Placeholder */}
+                           <div className="absolute bottom-[-20px] left-1/2 -translate-x-1/2 w-[280px] h-[400px] bg-black opacity-80 blur-2xl rounded-t-full"></div>
+                      </div>
+
+                      {/* Content Container */}
+                      <div className="relative z-10 w-full h-full flex flex-col p-6 overflow-hidden">
                           
-                          <div className="space-y-4 font-serif text-sm text-parchment leading-relaxed">
-                              <div className="p-3 bg-white/5 rounded border-l-2 border-gold/50">
-                                  <h4 className="text-xs font-bold text-gold uppercase mb-1">Status</h4>
-                                  <p>{oracleResult.card1_content}</p>
-                              </div>
-                              <div className="p-3 bg-white/5 rounded border-l-2 border-red-500/50">
-                                  <h4 className="text-xs font-bold text-red-400 uppercase mb-1">Challenge</h4>
-                                  <p>{oracleResult.card2_content}</p>
-                              </div>
-                              <div className="p-3 bg-white/5 rounded border-l-2 border-blue-500/50">
-                                  <h4 className="text-xs font-bold text-blue-400 uppercase mb-1">Action</h4>
-                                  <p>{oracleResult.card3_content}</p>
-                              </div>
-                              <div className="mt-4 pt-4 border-t border-white/10 italic text-gold/80">
-                                  "{oracleResult.synthesis_content}"
-                              </div>
+                          {/* Floating Cards (Top) */}
+                          <div className="flex justify-center gap-4 mt-4 mb-8 animate-float">
+                                {readingCards.map((c, i) => (
+                                    <div key={i} className="w-14 h-20 bg-midnight border border-gold/40 rounded shadow-lg flex items-center justify-center text-2xl">
+                                        {c.icon}
+                                    </div>
+                                ))}
                           </div>
 
-                          <button onClick={() => setShowShareCard(true)} className="w-full mt-6 py-3 bg-gold/10 border border-gold/30 text-gold hover:bg-gold hover:text-black transition-colors font-mystic text-xs uppercase tracking-widest">
-                              Crystallize Fate
-                          </button>
+                          {/* Scroll */}
+                          <div className="flex-1 bg-black/40 border border-gold/20 backdrop-blur-md p-6 rounded-lg animate-unroll origin-top overflow-y-auto custom-scrollbar">
+                                <div className="text-center mb-6">
+                                    <h2 className="font-mystic text-xl text-gold mb-2 text-glow">{oracleResult.synthesis_title}</h2>
+                                    <div className="w-16 h-[1px] bg-gold/50 mx-auto"></div>
+                                </div>
+                                <div className="space-y-6">
+                                    <div className="bg-white/5 p-3 rounded border-l-2 border-purple-500">
+                                        <h4 className="text-purple-300 text-xs font-bold uppercase mb-1">Status</h4>
+                                        <p className="text-sm text-gray-300 font-serif leading-relaxed">{oracleResult.card1_content}</p>
+                                    </div>
+                                    <div className="bg-white/5 p-3 rounded border-l-2 border-red-500">
+                                        <h4 className="text-red-300 text-xs font-bold uppercase mb-1">Obstacle</h4>
+                                        <p className="text-sm text-gray-300 font-serif leading-relaxed">{oracleResult.card2_content}</p>
+                                    </div>
+                                    <div className="bg-white/5 p-3 rounded border-l-2 border-emerald-500">
+                                        <h4 className="text-emerald-300 text-xs font-bold uppercase mb-1">Action</h4>
+                                        <p className="text-sm text-gray-300 font-serif leading-relaxed">{oracleResult.card3_content}</p>
+                                    </div>
+                                    <div className="bg-gold/5 p-4 rounded border border-gold/10 mt-4">
+                                        <p className="font-serif text-parchment italic text-sm text-justify leading-relaxed">
+                                            "{oracleResult.synthesis_content}"
+                                        </p>
+                                    </div>
+                                </div>
+                                <button onClick={() => setShowShareCard(true)} className="w-full mt-6 py-4 border border-gold/30 text-gold hover:bg-gold hover:text-midnight transition-colors font-mystic text-sm uppercase tracking-widest">
+                                    ✦ Crystallize Fate ✦
+                                </button>
+                          </div>
+
                       </div>
                   </div>
               )}
