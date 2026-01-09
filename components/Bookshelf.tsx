@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { LIBRARY_ARCHIVE } from '../data/books';
-import { Grimoire } from '../types';
+import { Grimoire, RealmType } from '../types';
 
 interface BookshelfProps {
     onBookSelected: (book: Grimoire) => void;
@@ -9,8 +9,16 @@ interface BookshelfProps {
 interface BookSpineProps {
     book: Grimoire;
     onClick: (e: React.MouseEvent, book: Grimoire) => void;
-    isHidden: boolean; // Visual hide when the book is "out"
+    isHidden: boolean;
 }
+
+// --- CONFIG: THE MAGIC REALMS ---
+const REALM_CONFIG: Record<RealmType, { label: string; subLabel: string; icon: string; color: string }> = {
+    apprentice: { label: 'Initiate', subLabel: 'K12 / Basis', icon: '🌱', color: '#4ADE80' },
+    adept: { label: 'Adept', subLabel: 'University', icon: '🧿', color: '#60A5FA' },
+    archmage: { label: 'Archmage', subLabel: 'Masters / Abroad', icon: '🔥', color: '#F43F5E' },
+    guild: { label: 'Guild', subLabel: 'Profession', icon: '⚙️', color: '#F59E0B' },
+};
 
 // Helper to get random but deterministic height
 const getBookHeight = (book: Grimoire) => (book.word_count % 30) + 180;
@@ -70,20 +78,57 @@ const BookSpine: React.FC<BookSpineProps> = ({ book, onClick, isHidden }) => {
 };
 
 const Bookshelf: React.FC<BookshelfProps> = ({ onBookSelected }) => {
+    // Data State
+    const [activeRealm, setActiveRealm] = useState<RealmType>('adept');
+    const [filteredBooks, setFilteredBooks] = useState<Grimoire[]>([]);
+
+    // Animation & Logic State
     const [selectedBook, setSelectedBook] = useState<Grimoire | null>(null);
     const [sourceRect, setSourceRect] = useState<DOMRect | null>(null);
     const [animState, setAnimState] = useState<'opening' | 'open' | 'closing'>('opening');
     
     // Interaction States
-    const [isBookOpen, setIsBookOpen] = useState(false); // Is the cover flipped?
-    const [isPressing, setIsPressing] = useState(false); // The "Squash" anticipation state
-    const [isBinding, setIsBinding] = useState(false);
+    const [isBookOpen, setIsBookOpen] = useState(false); // The final "Spread" state
+    const [isZooming, setIsZooming] = useState(false);   // The "Pop" state (Z-axis approach)
+    const [isBinding, setIsBinding] = useState(false);   // Enter World state
+
+    // Navigation State
+    const [isNavOpen, setIsNavOpen] = useState(false);
+    const [shelfTransition, setShelfTransition] = useState<'in' | 'out'>('in');
+
+    // Filter Books on Realm Change
+    useEffect(() => {
+        const books = LIBRARY_ARCHIVE.filter(b => b.realm === activeRealm);
+        setFilteredBooks(books);
+    }, [activeRealm]);
 
     // Group books for the shelves (chunks of 4)
     const shelves: Grimoire[][] = [];
-    for (let i = 0; i < LIBRARY_ARCHIVE.length; i += 4) {
-        shelves.push(LIBRARY_ARCHIVE.slice(i, i + 4));
+    for (let i = 0; i < filteredBooks.length; i += 4) {
+        shelves.push(filteredBooks.slice(i, i + 4));
     }
+
+    // --- HANDLERS ---
+
+    const handleRealmChange = (realm: RealmType) => {
+        if (realm === activeRealm) {
+            setIsNavOpen(false);
+            return;
+        }
+
+        // 1. Exit Animation
+        setShelfTransition('out');
+        setIsNavOpen(false);
+
+        // 2. Switch Data & Enter Animation
+        setTimeout(() => {
+            setActiveRealm(realm);
+            // Small delay to allow DOM to clear before fading in
+            setTimeout(() => {
+                setShelfTransition('in');
+            }, 50);
+        }, 500);
+    };
 
     const handleSpineClick = (e: React.MouseEvent, book: Grimoire) => {
         const rect = e.currentTarget.getBoundingClientRect();
@@ -91,7 +136,7 @@ const Bookshelf: React.FC<BookshelfProps> = ({ onBookSelected }) => {
         setSelectedBook(book);
         setAnimState('opening');
         setIsBookOpen(false); 
-        setIsPressing(false);
+        setIsZooming(false);
 
         requestAnimationFrame(() => {
             void document.body.offsetHeight;
@@ -102,10 +147,8 @@ const Bookshelf: React.FC<BookshelfProps> = ({ onBookSelected }) => {
     const handleClose = (e?: React.MouseEvent) => {
         e?.stopPropagation();
         
-        // If book is open (reading mode), close the cover first
         if (isBookOpen) {
             setIsBookOpen(false);
-            // Wait for cover close animation (600ms) then fly back
             setTimeout(() => {
                 setAnimState('closing');
                 setTimeout(() => {
@@ -130,17 +173,12 @@ const Bookshelf: React.FC<BookshelfProps> = ({ onBookSelected }) => {
         if (animState !== 'open') return;
 
         if (!isBookOpen) {
-            // OPENING SEQUENCE:
-            // 1. Squash (Anticipation)
-            setIsPressing(true);
-            
-            // 2. Release & Open
+            setIsZooming(true);
             setTimeout(() => {
-                setIsPressing(false);
+                setIsZooming(false);
                 setIsBookOpen(true);
-            }, 200); // 200ms press duration
+            }, 400); 
         } else {
-            // Closing is simpler
             setIsBookOpen(false);
         }
     };
@@ -159,14 +197,13 @@ const Bookshelf: React.FC<BookshelfProps> = ({ onBookSelected }) => {
         if (!sourceRect) return {};
 
         const isOpeningOrClosing = animState === 'opening' || animState === 'closing';
-        const targetWidth = 256; // w-64 (Cover width)
-        const targetHeight = 384; // h-96
+        const targetWidth = 256; 
+        const targetHeight = 384; 
 
         const centerLeft = (window.innerWidth - targetWidth) / 2;
         const centerTop = (window.innerHeight - targetHeight) / 2;
 
         if (isOpeningOrClosing) {
-            // State: AT THE SHELF
             const thicknessOffset = 20; 
             return {
                 top: `${sourceRect.top}px`,
@@ -178,23 +215,19 @@ const Bookshelf: React.FC<BookshelfProps> = ({ onBookSelected }) => {
                 zIndex: 60
             };
         } else {
-            // State: CENTERED
-            
-            // 1. Expansion: Shift right to center the spine
             const offsetForOpen = isBookOpen ? (targetWidth / 2) : 0;
-            
-            // 2. Rotation: 
-            // - If Pressing: Maintain angle but scale down (Squash)
-            // - If Open: Dead flat (0deg)
-            // - If Closed (Floating): Angled (-15deg)
-            
             let rotation = 'rotateY(-15deg)';
+            let translateZ = 'translateZ(0px)';
             let scale = 'scale(1)';
 
-            if (isPressing) {
-                 scale = 'scale(0.95)'; // The Squash
+            if (isZooming) {
+                rotation = 'rotateY(0deg)';
+                translateZ = 'translateZ(100px)';
+                scale = 'scale(1.1)';
             } else if (isBookOpen) {
-                 rotation = 'rotateY(0deg)'; // The Straighten
+                rotation = 'rotateY(0deg)';
+                translateZ = 'translateZ(0px)';
+                scale = 'scale(1)';
             }
 
             return {
@@ -202,9 +235,8 @@ const Bookshelf: React.FC<BookshelfProps> = ({ onBookSelected }) => {
                 left: `${centerLeft}px`,
                 width: `${targetWidth}px`,
                 height: `${targetHeight}px`,
-                // We use translate3d to animate the position
-                transform: `translate3d(${offsetForOpen}px,0,0) ${rotation} ${scale}`,
-                transformOrigin: '0% 50%', // Important: Pivot from the Spine (Left edge)
+                transform: `translate3d(${offsetForOpen}px, 0, 0) ${translateZ} ${rotation} ${scale}`,
+                transformOrigin: '0% 50%', 
                 zIndex: 60
             };
         }
@@ -222,31 +254,134 @@ const Bookshelf: React.FC<BookshelfProps> = ({ onBookSelected }) => {
                 <h1 className="font-mystic text-gold/80 text-xl tracking-[0.4em] text-glow mb-1 opacity-60">THE ARCHIVE</h1>
             </div>
 
-            {/* --- SHELVES CONTAINER --- */}
-            <div className="flex-1 overflow-y-auto custom-scrollbar px-6 pb-20 relative z-10">
-                <div className="max-w-md mx-auto space-y-16 mt-8">
-                    {shelves.map((shelfBooks, i) => (
-                        <div key={i} className="relative group">
-                            {/* The Books */}
-                            <div className="flex items-end justify-center px-4 relative z-10 perspective-1000">
-                                {shelfBooks.map(book => (
-                                    <BookSpine 
-                                        key={book.id} 
-                                        book={book} 
-                                        onClick={handleSpineClick} 
-                                        isHidden={selectedBook?.id === book.id} 
-                                    />
-                                ))}
-                            </div>
+            {/* --- SHELVES CONTAINER (The Realm Gate) --- */}
+            <div className="flex-1 overflow-y-auto custom-scrollbar px-6 pb-40 relative z-10 perspective-1000">
+                <div 
+                    className={`
+                        max-w-md mx-auto space-y-16 mt-8 transition-all duration-700 ease-[cubic-bezier(0.25,0.8,0.25,1)]
+                        ${shelfTransition === 'in' 
+                            ? 'opacity-100 translate-z-0 blur-0' 
+                            : 'opacity-0 translate-z-[-100px] blur-sm scale-95'}
+                    `}
+                >
+                    {shelves.length === 0 ? (
+                         <div className="flex flex-col items-center justify-center h-64 text-white/20">
+                             <div className="text-4xl mb-2">🕸️</div>
+                             <div className="font-mystic text-xs tracking-widest">This Realm is Empty</div>
+                         </div>
+                    ) : (
+                        shelves.map((shelfBooks, i) => (
+                            <div key={i} className="relative group">
+                                {/* The Books */}
+                                <div className="flex items-end justify-center px-4 relative z-10 perspective-1000">
+                                    {shelfBooks.map(book => (
+                                        <BookSpine 
+                                            key={book.id} 
+                                            book={book} 
+                                            onClick={handleSpineClick} 
+                                            isHidden={selectedBook?.id === book.id} 
+                                        />
+                                    ))}
+                                </div>
 
-                            {/* The Shelf Plank */}
-                            <div className="absolute bottom-0 left-0 right-0 h-4 bg-[#2a1d18] shadow-[0_10px_20px_rgba(0,0,0,0.8)] transform translate-y-full rounded-sm">
-                                <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/wood-pattern.png')] opacity-50 mix-blend-multiply"></div>
-                                <div className="absolute top-0 left-0 right-0 h-[1px] bg-white/10"></div>
+                                {/* The Shelf Plank */}
+                                <div className="absolute bottom-0 left-0 right-0 h-4 bg-[#2a1d18] shadow-[0_10px_20px_rgba(0,0,0,0.8)] transform translate-y-full rounded-sm">
+                                    <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/wood-pattern.png')] opacity-50 mix-blend-multiply"></div>
+                                    <div className="absolute top-0 left-0 right-0 h-[1px] bg-white/10"></div>
+                                </div>
                             </div>
-                        </div>
-                    ))}
+                        ))
+                    )}
                 </div>
+            </div>
+
+            {/* --- THE ASTRAL COMPASS (Navigation) --- */}
+            <div className="absolute bottom-6 left-0 right-0 flex justify-center z-40 pointer-events-none">
+                 <div className="relative pointer-events-auto">
+                     
+                     {/* The Radial Menu (Expands Upwards) */}
+                     <div 
+                        className={`
+                            absolute bottom-1/2 left-1/2 -translate-x-1/2 w-64 h-32 origin-bottom transition-all duration-500 ease-out overflow-hidden
+                            ${isNavOpen ? 'opacity-100 scale-100' : 'opacity-0 scale-50 pointer-events-none'}
+                        `}
+                     >
+                         {/* Golden Arc Border */}
+                         <div className="absolute bottom-0 left-0 right-0 h-[200%] border border-gold/40 rounded-full shadow-[0_0_20px_rgba(197,160,89,0.2)]"></div>
+                         
+                         {/* Menu Items */}
+                         {Object.entries(REALM_CONFIG).map(([key, config], idx, arr) => {
+                             // Position along arc (180 deg)
+                             const total = arr.length;
+                             const step = 180 / (total + 1);
+                             const angle = (idx + 1) * step; // e.g. 36, 72, 108, 144
+                             const rad = (angle * Math.PI) / 180;
+                             
+                             // Radius of item placement
+                             const r = 100; // px
+                             const x = 128 - (r * Math.cos(rad)); // 128 is center (w-64/2)
+                             const y = 128 - (r * Math.sin(rad)); // 128 is bottom
+
+                             const isActive = key === activeRealm;
+
+                             return (
+                                <button
+                                    key={key}
+                                    onClick={() => handleRealmChange(key as RealmType)}
+                                    className="absolute w-12 h-12 -ml-6 -mt-6 rounded-full flex flex-col items-center justify-center transition-all duration-300 hover:scale-110 group"
+                                    style={{ left: `${x}px`, top: `${y}px` }}
+                                >
+                                    <div 
+                                        className={`
+                                            w-10 h-10 rounded-full border flex items-center justify-center bg-midnight shadow-lg
+                                            ${isActive ? 'border-gold text-gold scale-110' : 'border-gold/30 text-gold/40 hover:text-gold hover:border-gold'}
+                                        `}
+                                    >
+                                        <span className="text-lg">{config.icon}</span>
+                                    </div>
+                                    <div className={`
+                                        absolute -bottom-4 text-[8px] uppercase tracking-wider font-mystic whitespace-nowrap bg-midnight/80 px-2 py-0.5 rounded
+                                        ${isActive ? 'text-gold opacity-100' : 'text-gold/50 opacity-0 group-hover:opacity-100'}
+                                    `}>
+                                        {config.label}
+                                    </div>
+                                </button>
+                             );
+                         })}
+
+                     </div>
+
+                     {/* The Hexagram Control (Spinner) */}
+                     <button
+                        onClick={() => setIsNavOpen(!isNavOpen)}
+                        className={`
+                            relative w-20 h-20 flex items-center justify-center transition-transform duration-500
+                            ${isNavOpen ? 'scale-90' : 'scale-100 hover:scale-105'}
+                        `}
+                     >
+                         {/* Spinning Outer Ring */}
+                         <div className="absolute inset-0 rounded-full border border-gold/30 border-dashed animate-[spin_20s_linear_infinite]"></div>
+                         
+                         {/* The Hexagram (Two Triangles) */}
+                         <div className={`absolute inset-2 transition-transform duration-1000 ${isNavOpen ? 'rotate-180' : 'animate-[spin_10s_linear_infinite]'}`}>
+                             <div className="absolute inset-0 flex items-center justify-center">
+                                 <div className="w-16 h-16 border border-gold/40 rotate-0 absolute"></div> {/* Box logic simplified for cleaner hexagram feel */}
+                                 <div className="w-16 h-16 border border-gold/40 rotate-60 absolute"></div>
+                                 <div className="w-16 h-16 border border-gold/40 -rotate-60 absolute"></div>
+                             </div>
+                         </div>
+
+                         {/* Center Core */}
+                         <div className="relative z-10 w-12 h-12 bg-midnight rounded-full border border-gold shadow-[0_0_15px_rgba(197,160,89,0.5)] flex items-center justify-center">
+                              {isNavOpen ? (
+                                  <span className="text-gold text-xs">✕</span>
+                              ) : (
+                                  <span className="text-xl animate-pulse">{REALM_CONFIG[activeRealm].icon}</span>
+                              )}
+                         </div>
+
+                     </button>
+                 </div>
             </div>
 
             {/* --- THE FLYING BOOK LAYER --- */}
@@ -262,7 +397,7 @@ const Bookshelf: React.FC<BookshelfProps> = ({ onBookSelected }) => {
                     {/* THE BOOK RIG */}
                     <div 
                         className={`
-                            absolute transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] preserve-3d pointer-events-auto
+                            absolute transition-all duration-700 ease-[cubic-bezier(0.34,1.56,0.64,1)] preserve-3d pointer-events-auto
                             ${isBinding ? 'animate-[shake_0.5s_ease-in-out_infinite] scale-105 brightness-125' : ''}
                         `}
                         style={getFlyingStyle()}
@@ -273,17 +408,11 @@ const Bookshelf: React.FC<BookshelfProps> = ({ onBookSelected }) => {
                         {/* 
                            ========================================================================
                            COMPONENT A: THE FLIPPER (Front Cover + Inner Left Page)
-                           This group rotates -180deg when opening.
-                           Anchor point: Left Edge
-                           
-                           ANIMATION NOTE: We add 'delay-100' so the book straightens FIRST,
-                           then the cover flips open.
                            ========================================================================
                         */}
                         <div 
                             className={`
-                                absolute inset-0 preserve-3d origin-left transition-transform duration-700 ease-[cubic-bezier(0.4,0,0.2,1)]
-                                ${isBookOpen ? 'delay-100' : ''}
+                                absolute inset-0 preserve-3d origin-left transition-transform duration-700 ease-[cubic-bezier(0.25,1,0.5,1)]
                             `}
                             style={{ 
                                 transform: isBookOpen ? 'rotateY(-180deg)' : 'rotateY(0deg)',
@@ -295,7 +424,7 @@ const Bookshelf: React.FC<BookshelfProps> = ({ onBookSelected }) => {
                                 className="absolute inset-0 rounded-r-md flex flex-col items-center p-6 text-center justify-between backface-hidden overflow-hidden"
                                 style={{
                                     backgroundColor: '#1a1412',
-                                    transform: 'translateZ(20px)', // Front Face
+                                    transform: 'translateZ(10px)', // Front Face thickness
                                     boxShadow: 'inset 5px 0 15px rgba(0,0,0,0.8), 10px 10px 30px rgba(0,0,0,0.8)'
                                 }}
                             >
@@ -327,17 +456,16 @@ const Bookshelf: React.FC<BookshelfProps> = ({ onBookSelected }) => {
                             <div 
                                 className="absolute inset-0 bg-[#e3dac9] rounded-l-md backface-hidden flex flex-col p-6 overflow-hidden preserve-3d"
                                 style={{
-                                    transform: 'translateZ(20px) rotateY(180deg)', // Back of the front cover
+                                    transform: 'translateZ(10px) rotateY(180deg)', // Back of the front cover
                                     boxShadow: 'inset -10px 0 30px rgba(0,0,0,0.1), 5px 0 15px rgba(0,0,0,0.1)' 
                                 }}
                             >
                                 {/* 3D PAGE THICKNESS (Right Edge of Left Page) - The "Gutter" */}
                                 <div 
-                                    className="absolute right-0 top-1 bottom-1 w-[4px] origin-right"
+                                    className="absolute right-0 top-1 bottom-1 w-[6px] origin-right"
                                     style={{ 
                                         transform: 'rotateY(-90deg)',
-                                        background: 'linear-gradient(to right, #ccc 0%, #e3dac9 100%)',
-                                        backgroundSize: '1px 100%'
+                                        background: 'linear-gradient(to right, #ccc 0%, #e3dac9 40%, #c5bba8 100%)', // Rounded thickness effect
                                     }}
                                 ></div>
 
@@ -356,7 +484,7 @@ const Bookshelf: React.FC<BookshelfProps> = ({ onBookSelected }) => {
                                     </p>
                                     
                                     <div className="mt-8 text-[9px] uppercase tracking-[0.2em] opacity-40">
-                                        {selectedBook.realm} Realm
+                                        {REALM_CONFIG[selectedBook.realm].label}
                                     </div>
                                 </div>
                             </div>
@@ -366,7 +494,6 @@ const Bookshelf: React.FC<BookshelfProps> = ({ onBookSelected }) => {
                         {/* 
                            ========================================================================
                            COMPONENT B: THE BASE (Spine + Back Cover + Right Page)
-                           This group stays static (relative to container).
                            ========================================================================
                         */}
 
@@ -375,7 +502,7 @@ const Bookshelf: React.FC<BookshelfProps> = ({ onBookSelected }) => {
                             className="absolute top-0 bottom-0 left-0 bg-[#16100e] flex flex-col items-center justify-center border-l border-white/5 overflow-hidden"
                             style={{ 
                                 width: '40px',
-                                transform: 'translateZ(20px) rotateY(-90deg)', 
+                                transform: 'translateZ(10px) rotateY(-90deg)', 
                                 transformOrigin: 'left center',
                                 zIndex: 10
                             }} 
@@ -394,18 +521,17 @@ const Bookshelf: React.FC<BookshelfProps> = ({ onBookSelected }) => {
                         <div 
                             className="absolute top-1 bottom-1 left-0 right-1 bg-[#e3dac9] rounded-r-sm shadow-inner preserve-3d"
                             style={{
-                                transform: 'translateZ(18px)', // Slightly Recessed from the Z20 plane
+                                transform: 'translateZ(8px)', // Slightly Recessed from the Z10 plane
                                 zIndex: 5,
                                 background: '#e3dac9'
                             }}
                         >
                             {/* 3D PAGE THICKNESS (Left Edge of Right Page) - The "Gutter" */}
                             <div 
-                                className="absolute left-0 top-1 bottom-1 w-[4px] origin-left"
+                                className="absolute left-0 top-1 bottom-1 w-[6px] origin-left"
                                 style={{ 
                                     transform: 'rotateY(90deg)',
-                                    background: 'linear-gradient(to left, #ccc 0%, #e3dac9 100%)',
-                                    backgroundSize: '1px 100%'
+                                    background: 'linear-gradient(to left, #ccc 0%, #e3dac9 40%, #c5bba8 100%)',
                                 }}
                             ></div>
 
@@ -439,12 +565,12 @@ const Bookshelf: React.FC<BookshelfProps> = ({ onBookSelected }) => {
                             </div>
                         </div>
 
-                        {/* --- PAGES (Side View / Thickness) --- */}
+                        {/* --- PAGES BLOCK (Side View / Thickness) --- */}
                         <div 
                             className="absolute top-1 bottom-1 right-0 bg-[#e3dac9]"
                             style={{
                                 width: '36px', 
-                                transform: 'translateZ(20px) rotateY(90deg)',
+                                transform: 'translateZ(10px) rotateY(90deg)',
                                 transformOrigin: 'right center',
                                 backgroundImage: "linear-gradient(to right, #dcd1b4 1px, transparent 1px)",
                                 backgroundSize: "2px 100%"
@@ -455,7 +581,7 @@ const Bookshelf: React.FC<BookshelfProps> = ({ onBookSelected }) => {
                         <div 
                             className="absolute inset-0 bg-[#1a1412] rounded-l-md"
                             style={{ 
-                                transform: 'translateZ(-20px) rotateY(180deg)',
+                                transform: 'translateZ(-10px) rotateY(180deg)',
                                 boxShadow: '0 0 20px rgba(0,0,0,0.5)'
                             }}
                         ></div>
