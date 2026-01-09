@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { LIBRARY_ARCHIVE } from '../data/books';
 import { Grimoire, RealmType } from '../types';
@@ -13,6 +14,8 @@ interface BookSpineProps {
 }
 
 // --- CONFIG: THE MAGIC REALMS ---
+const REALM_ORDER: RealmType[] = ['apprentice', 'adept', 'archmage', 'guild'];
+
 const REALM_CONFIG: Record<RealmType, { label: string; subLabel: string; icon: string; color: string }> = {
     apprentice: { label: 'Initiate', subLabel: 'K12 / Basis', icon: '🌱', color: '#4ADE80' },
     adept: { label: 'Adept', subLabel: 'University', icon: '🧿', color: '#60A5FA' },
@@ -40,20 +43,11 @@ const BookSpine: React.FC<BookSpineProps> = ({ book, onClick, isHidden }) => {
                     boxShadow: 'inset 4px 0 10px rgba(0,0,0,0.8), inset -2px 0 5px rgba(255,255,255,0.05), 5px 0 10px rgba(0,0,0,0.5)'
                 }}
             >
-                {/* Spine Tint (Theme Color) - Subtle */}
                 <div className="absolute inset-0 opacity-40 mix-blend-overlay" style={{ backgroundColor: book.theme_color }}></div>
-                
-                {/* Leather Texture */}
                 <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/black-scales.png')] opacity-30 mix-blend-multiply"></div>
-
-                {/* Ribs (The bumps on a spine) */}
                 <div className="absolute top-10 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-gold/30 to-transparent shadow-sm"></div>
                 <div className="absolute bottom-10 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-gold/30 to-transparent shadow-sm"></div>
-
-                {/* Top Icon */}
                 <div className="relative z-10 text-[10px] grayscale opacity-50">{book.icon}</div>
-
-                {/* Vertical Text (Hot Stamped Gold) */}
                 <div className="flex-1 flex items-center justify-center py-2 writing-vertical-rl">
                      <span 
                         className="font-mystic text-sm tracking-[0.2em] uppercase truncate max-h-full rotate-180 transform"
@@ -67,8 +61,6 @@ const BookSpine: React.FC<BookSpineProps> = ({ book, onClick, isHidden }) => {
                          {book.title}
                      </span>
                 </div>
-
-                {/* Level Number */}
                 <div className="relative z-10 font-serif text-[8px] text-gold/40">
                     {book.difficulty_level}
                 </div>
@@ -76,6 +68,296 @@ const BookSpine: React.FC<BookSpineProps> = ({ book, onClick, isHidden }) => {
         </div>
     );
 };
+
+// --- SPARK SYSTEM ---
+interface Spark {
+    id: number;
+    x: number;
+    y: number;
+    angle: number; // Direction of flight
+    speed: number;
+    life: number;
+    color: string;
+}
+
+// --- COMPONENT: THE ELDRITCH MANDALA ---
+const EldritchMandala = ({ 
+    activeRealm, 
+    isOpen, 
+    onRealmChange,
+    onClose
+}: { 
+    activeRealm: RealmType, 
+    isOpen: boolean, 
+    onRealmChange: (r: RealmType) => void,
+    onClose: () => void
+}) => {
+    // Physics State
+    const [rotation, setRotation] = useState(0);
+    const [isDragging, setIsDragging] = useState(false);
+    
+    // Spark State
+    const [sparks, setSparks] = useState<Spark[]>([]);
+    
+    // Refs for Loop
+    const dragStartX = useRef<number | null>(null);
+    const startRotation = useRef(0);
+    const velocity = useRef(0);
+    const lastX = useRef(0);
+    const lastTime = useRef(0);
+    const reqRef = useRef<number>();
+    
+    // Constants
+    const ITEM_ANGLE = 90; // 4 items = 90 degrees apart
+    const WHEEL_SIZE = 340; // Smaller, tighter
+    
+    // Init Rotation
+    useEffect(() => {
+        const index = REALM_ORDER.indexOf(activeRealm);
+        if (index !== -1) setRotation(-index * ITEM_ANGLE);
+    }, []); 
+
+    // --- PHYSICS & SPARK LOOP ---
+    useEffect(() => {
+        const updatePhysics = () => {
+            // 1. Apply Velocity to Rotation
+            if (!isDragging && Math.abs(velocity.current) > 0.1) {
+                velocity.current *= 0.94; // Friction
+                setRotation(prev => prev + velocity.current);
+            } else if (!isDragging && Math.abs(velocity.current) <= 0.1) {
+                // Snap Logic
+                const currentIdx = Math.round(-rotation / ITEM_ANGLE);
+                const targetRotation = -currentIdx * ITEM_ANGLE;
+                const diff = targetRotation - rotation;
+                if (Math.abs(diff) > 0.1) {
+                    setRotation(prev => prev + diff * 0.15); // Snap speed
+                    
+                    // Finalize Selection
+                    const clampedIdx = (currentIdx % 4 + 4) % 4; // Wrap around math
+                    // Note: Since our logic limits rotation, we map purely by index order
+                    // Actually, let's keep it bounded for simplicity or handle wrapping visual only
+                }
+            }
+
+            // 2. Generate Sparks on High Friction
+            if (isDragging && Math.abs(velocity.current) > 0.5) {
+                const newSpark: Spark = {
+                    id: Math.random(),
+                    x: WHEEL_SIZE / 2 + (Math.random() - 0.5) * 20, // Emit from edge-ish
+                    y: 20, // Top of the arc (relative to container)
+                    angle: velocity.current > 0 ? -Math.PI / 4 : -Math.PI * 0.75, // Tangential flight
+                    speed: Math.abs(velocity.current) * 1.5 + Math.random() * 2,
+                    life: 1.0,
+                    color: Math.random() > 0.5 ? '#FCD34D' : '#F97316' // Amber/Orange
+                };
+                setSparks(prev => [...prev.slice(-15), newSpark]); // Limit max sparks
+            }
+
+            // 3. Update Sparks
+            setSparks(prev => prev.map(s => ({
+                ...s,
+                x: s.x + Math.cos(s.angle) * s.speed,
+                y: s.y + Math.sin(s.angle) * s.speed + (1 - s.life) * 2, // Gravity
+                life: s.life - 0.05
+            })).filter(s => s.life > 0));
+
+            reqRef.current = requestAnimationFrame(updatePhysics);
+        };
+        
+        reqRef.current = requestAnimationFrame(updatePhysics);
+        return () => cancelAnimationFrame(reqRef.current!);
+    }, [isDragging, rotation]);
+
+    // --- GESTURE HANDLERS ---
+    const handleStart = (clientX: number) => {
+        setIsDragging(true);
+        dragStartX.current = clientX;
+        lastX.current = clientX;
+        lastTime.current = Date.now();
+        startRotation.current = rotation;
+        velocity.current = 0;
+    };
+
+    const handleMove = (clientX: number) => {
+        if (!isDragging || dragStartX.current === null) return;
+        
+        const dx = clientX - dragStartX.current;
+        const now = Date.now();
+        const dt = now - lastTime.current;
+        
+        if (dt > 0) {
+            const moveX = clientX - lastX.current;
+            velocity.current = (moveX / dt) * 12; // High sensitivity for "Flick" feel
+        }
+        
+        // No rubber banding, infinite scroll feel locally (clamped at end)
+        const newRot = startRotation.current + (dx * 0.5);
+        setRotation(newRot);
+
+        lastX.current = clientX;
+        lastTime.current = now;
+    };
+
+    const handleEnd = () => {
+        setIsDragging(false);
+        dragStartX.current = null;
+        
+        // Predict landing
+        const projectedRot = rotation + velocity.current * 20;
+        let targetIdx = Math.round(-projectedRot / ITEM_ANGLE);
+        
+        // Clamp index to array bounds
+        targetIdx = Math.max(0, Math.min(REALM_ORDER.length - 1, targetIdx));
+        
+        if (REALM_ORDER[targetIdx] !== activeRealm) {
+            onRealmChange(REALM_ORDER[targetIdx]);
+        }
+    };
+
+    return (
+        <div className="absolute bottom-0 left-0 right-0 flex justify-center z-40 pointer-events-none">
+            <div className="relative pointer-events-auto w-full h-full flex justify-center">
+
+                 {/* --- MANDALA CONTAINER --- */}
+                 <div 
+                    className={`
+                        absolute bottom-[-170px] transition-all duration-500 ease-out
+                        ${isOpen ? 'translate-y-0 opacity-100' : 'translate-y-20 opacity-0 pointer-events-none'}
+                    `}
+                    style={{ width: `${WHEEL_SIZE}px`, height: `${WHEEL_SIZE}px` }}
+                    onTouchStart={(e) => handleStart(e.touches[0].clientX)}
+                    onTouchMove={(e) => handleMove(e.touches[0].clientX)}
+                    onTouchEnd={handleEnd}
+                    onMouseDown={(e) => handleStart(e.clientX)}
+                    onMouseMove={(e) => handleMove(e.clientX)}
+                    onMouseUp={handleEnd}
+                    onMouseLeave={handleEnd}
+                 >
+                     {/* 
+                        === GEOMETRY LAYERS (The Doctor Strange Effect) === 
+                        Uses mix-blend-mode: screen/plus-lighter to make overlapping lines glow hotter
+                     */}
+                     
+                     {/* Layer 1: The Runes Ring (Counter Rotates) */}
+                     <div 
+                        className="absolute inset-[10%] rounded-full border border-orange-500/30 border-dashed"
+                        style={{ transform: `rotate(${rotation * -0.2}deg)` }}
+                     >
+                        <div className="absolute inset-0 flex items-center justify-center opacity-30 animate-[spin_60s_linear_infinite]">
+                             {/* SVG Path Text could go here, simplified as dashed lines */}
+                             <div className="w-[110%] h-[110%] border border-orange-400/20 rounded-full border-dotted"></div>
+                        </div>
+                     </div>
+
+                     {/* Layer 2: The Squares (Octagram Construction) */}
+                     <div className="absolute inset-[15%] flex items-center justify-center transition-transform duration-75" style={{ transform: `rotate(${rotation}deg)` }}>
+                         {/* Square 1 */}
+                         <div className="absolute w-full h-full border border-orange-500/60 shadow-[0_0_15px_rgba(249,115,22,0.4)]"></div>
+                         {/* Square 2 (Rotated 45) */}
+                         <div className="absolute w-full h-full border border-orange-500/60 shadow-[0_0_15px_rgba(249,115,22,0.4)] rotate-45"></div>
+                         
+                         {/* Inner Circle Glow */}
+                         <div className="absolute w-[70%] h-[70%] rounded-full border-2 border-amber-300/50 shadow-[0_0_20px_rgba(251,191,36,0.6)]"></div>
+                     </div>
+
+                     {/* Layer 3: The Items (Stationary relative to wheel) */}
+                     <div 
+                        className="absolute inset-0 rounded-full"
+                        style={{ transform: `rotate(${rotation}deg)` }}
+                     >
+                         {REALM_ORDER.map((realmId, idx) => {
+                             const angle = idx * ITEM_ANGLE; // 0, 90, 180, 270
+                             const isActive = activeRealm === realmId;
+                             
+                             return (
+                                 <div
+                                    key={realmId}
+                                    className="absolute top-0 left-1/2 w-12 h-12 -ml-6 -mt-6 flex flex-col items-center justify-center transform origin-center transition-all duration-300"
+                                    style={{ 
+                                        transformOrigin: `50% ${WHEEL_SIZE/2}px`, 
+                                        transform: `rotate(${angle}deg)` 
+                                    }}
+                                 >
+                                     {/* Icon Node */}
+                                     <div 
+                                        className={`
+                                            w-12 h-12 rounded-full border-2 flex items-center justify-center bg-[#0f0a05] shadow-[0_0_15px_rgba(249,115,22,0.2)] transition-all duration-300
+                                            ${isActive ? 'border-amber-400 text-amber-400 scale-125 shadow-[0_0_25px_rgba(251,191,36,0.6)]' : 'border-orange-800/50 text-orange-700 scale-90 opacity-60'}
+                                        `}
+                                        style={{ transform: `rotate(${-angle - rotation}deg)` }} // Keep icon upright
+                                     >
+                                         <span className="text-xl drop-shadow-md">{REALM_CONFIG[realmId].icon}</span>
+                                     </div>
+
+                                     {/* Floating Label */}
+                                     <div 
+                                        className={`
+                                            absolute top-14 text-center w-40 transition-all duration-300 pointer-events-none
+                                            ${isActive ? 'opacity-100 scale-100' : 'opacity-0 scale-50'}
+                                        `}
+                                        style={{ transform: `rotate(${-angle - rotation}deg)` }}
+                                     >
+                                         <div className="font-mystic text-amber-400 text-sm tracking-[0.2em] uppercase text-shadow glow-orange">{REALM_CONFIG[realmId].label}</div>
+                                         <div className="font-serif text-[9px] text-orange-200/60 tracking-wider">{REALM_CONFIG[realmId].subLabel}</div>
+                                     </div>
+                                 </div>
+                             );
+                         })}
+                     </div>
+                     
+                     {/* Layer 4: Sparks Canvas (HTML Overlay) */}
+                     <div className="absolute inset-0 pointer-events-none overflow-visible">
+                         {sparks.map(s => (
+                             <div 
+                                key={s.id}
+                                className="absolute rounded-full"
+                                style={{
+                                    left: '50%',
+                                    top: '0%', // Emit from top arc
+                                    width: `${Math.random() * 2 + 1}px`,
+                                    height: `${Math.random() * 2 + 1}px`,
+                                    backgroundColor: s.color,
+                                    transform: `translate(${s.x - WHEEL_SIZE/2}px, ${s.y}px)`,
+                                    opacity: s.life,
+                                    boxShadow: `0 0 6px ${s.color}`
+                                }}
+                             />
+                         ))}
+                     </div>
+
+                 </div>
+
+                 {/* --- CENTER TRIGGER (Eye of Agamotto style) --- */}
+                 <button
+                    onClick={onClose} 
+                    className={`
+                        absolute bottom-6 w-16 h-16 flex items-center justify-center transition-all duration-500 z-50
+                        ${isOpen ? 'scale-100' : 'scale-100 hover:scale-110'}
+                    `}
+                 >
+                     {/* Eye Lid Shape */}
+                     <div className={`absolute inset-0 bg-midnight border-2 border-amber-600 rounded-full flex items-center justify-center shadow-[0_0_30px_rgba(249,115,22,0.4)] ${isOpen ? 'rotate-90' : 'rotate-0'} transition-transform duration-500`}>
+                         <div className="w-[70%] h-[40%] border border-amber-400 rounded-[100%] absolute border-t-2 border-b-2"></div>
+                         
+                         {/* Pupil / Icon */}
+                         <div className="relative z-10 text-amber-500 font-bold text-lg">
+                             {isOpen ? '✕' : '✦'}
+                         </div>
+                     </div>
+                 </button>
+
+            </div>
+            
+            {/* Styles for Eldritch Glow */}
+            <style>{`
+                .glow-orange {
+                    text-shadow: 0 0 5px rgba(251, 191, 36, 0.5), 0 0 10px rgba(249, 115, 22, 0.3);
+                }
+            `}</style>
+        </div>
+    );
+};
+
 
 const Bookshelf: React.FC<BookshelfProps> = ({ onBookSelected }) => {
     // Data State
@@ -111,15 +393,11 @@ const Bookshelf: React.FC<BookshelfProps> = ({ onBookSelected }) => {
     // --- HANDLERS ---
 
     const handleRealmChange = (realm: RealmType) => {
-        if (realm === activeRealm) {
-            setIsNavOpen(false);
-            return;
-        }
+        if (realm === activeRealm) return;
 
         // 1. Exit Animation
         setShelfTransition('out');
-        setIsNavOpen(false);
-
+        
         // 2. Switch Data & Enter Animation
         setTimeout(() => {
             setActiveRealm(realm);
@@ -127,7 +405,7 @@ const Bookshelf: React.FC<BookshelfProps> = ({ onBookSelected }) => {
             setTimeout(() => {
                 setShelfTransition('in');
             }, 50);
-        }, 500);
+        }, 300); // Faster transition for wheel
     };
 
     const handleSpineClick = (e: React.MouseEvent, book: Grimoire) => {
@@ -146,7 +424,6 @@ const Bookshelf: React.FC<BookshelfProps> = ({ onBookSelected }) => {
 
     const handleClose = (e?: React.MouseEvent) => {
         e?.stopPropagation();
-        
         if (isBookOpen) {
             setIsBookOpen(false);
             setTimeout(() => {
@@ -158,9 +435,7 @@ const Bookshelf: React.FC<BookshelfProps> = ({ onBookSelected }) => {
             }, 600);
             return;
         }
-
         if (animState !== 'open') return;
-
         setAnimState('closing');
         setTimeout(() => {
             setSelectedBook(null);
@@ -171,7 +446,6 @@ const Bookshelf: React.FC<BookshelfProps> = ({ onBookSelected }) => {
     const handleToggleBook = (e: React.MouseEvent) => {
         e.stopPropagation();
         if (animState !== 'open') return;
-
         if (!isBookOpen) {
             setIsZooming(true);
             setTimeout(() => {
@@ -195,11 +469,9 @@ const Bookshelf: React.FC<BookshelfProps> = ({ onBookSelected }) => {
     // Calculate dynamic styles for the flying book
     const getFlyingStyle = () => {
         if (!sourceRect) return {};
-
         const isOpeningOrClosing = animState === 'opening' || animState === 'closing';
         const targetWidth = 256; 
         const targetHeight = 384; 
-
         const centerLeft = (window.innerWidth - targetWidth) / 2;
         const centerTop = (window.innerHeight - targetHeight) / 2;
 
@@ -283,7 +555,6 @@ const Bookshelf: React.FC<BookshelfProps> = ({ onBookSelected }) => {
                                         />
                                     ))}
                                 </div>
-
                                 {/* The Shelf Plank */}
                                 <div className="absolute bottom-0 left-0 right-0 h-4 bg-[#2a1d18] shadow-[0_10px_20px_rgba(0,0,0,0.8)] transform translate-y-full rounded-sm">
                                     <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/wood-pattern.png')] opacity-50 mix-blend-multiply"></div>
@@ -295,94 +566,13 @@ const Bookshelf: React.FC<BookshelfProps> = ({ onBookSelected }) => {
                 </div>
             </div>
 
-            {/* --- THE ASTRAL COMPASS (Navigation) --- */}
-            <div className="absolute bottom-6 left-0 right-0 flex justify-center z-40 pointer-events-none">
-                 <div className="relative pointer-events-auto">
-                     
-                     {/* The Radial Menu (Expands Upwards) */}
-                     <div 
-                        className={`
-                            absolute bottom-1/2 left-1/2 -translate-x-1/2 w-64 h-32 origin-bottom transition-all duration-500 ease-out overflow-hidden
-                            ${isNavOpen ? 'opacity-100 scale-100' : 'opacity-0 scale-50 pointer-events-none'}
-                        `}
-                     >
-                         {/* Golden Arc Border */}
-                         <div className="absolute bottom-0 left-0 right-0 h-[200%] border border-gold/40 rounded-full shadow-[0_0_20px_rgba(197,160,89,0.2)]"></div>
-                         
-                         {/* Menu Items */}
-                         {Object.entries(REALM_CONFIG).map(([key, config], idx, arr) => {
-                             // Position along arc (180 deg)
-                             const total = arr.length;
-                             const step = 180 / (total + 1);
-                             const angle = (idx + 1) * step; // e.g. 36, 72, 108, 144
-                             const rad = (angle * Math.PI) / 180;
-                             
-                             // Radius of item placement
-                             const r = 100; // px
-                             const x = 128 - (r * Math.cos(rad)); // 128 is center (w-64/2)
-                             const y = 128 - (r * Math.sin(rad)); // 128 is bottom
-
-                             const isActive = key === activeRealm;
-
-                             return (
-                                <button
-                                    key={key}
-                                    onClick={() => handleRealmChange(key as RealmType)}
-                                    className="absolute w-12 h-12 -ml-6 -mt-6 rounded-full flex flex-col items-center justify-center transition-all duration-300 hover:scale-110 group"
-                                    style={{ left: `${x}px`, top: `${y}px` }}
-                                >
-                                    <div 
-                                        className={`
-                                            w-10 h-10 rounded-full border flex items-center justify-center bg-midnight shadow-lg
-                                            ${isActive ? 'border-gold text-gold scale-110' : 'border-gold/30 text-gold/40 hover:text-gold hover:border-gold'}
-                                        `}
-                                    >
-                                        <span className="text-lg">{config.icon}</span>
-                                    </div>
-                                    <div className={`
-                                        absolute -bottom-4 text-[8px] uppercase tracking-wider font-mystic whitespace-nowrap bg-midnight/80 px-2 py-0.5 rounded
-                                        ${isActive ? 'text-gold opacity-100' : 'text-gold/50 opacity-0 group-hover:opacity-100'}
-                                    `}>
-                                        {config.label}
-                                    </div>
-                                </button>
-                             );
-                         })}
-
-                     </div>
-
-                     {/* The Hexagram Control (Spinner) */}
-                     <button
-                        onClick={() => setIsNavOpen(!isNavOpen)}
-                        className={`
-                            relative w-20 h-20 flex items-center justify-center transition-transform duration-500
-                            ${isNavOpen ? 'scale-90' : 'scale-100 hover:scale-105'}
-                        `}
-                     >
-                         {/* Spinning Outer Ring */}
-                         <div className="absolute inset-0 rounded-full border border-gold/30 border-dashed animate-[spin_20s_linear_infinite]"></div>
-                         
-                         {/* The Hexagram (Two Triangles) */}
-                         <div className={`absolute inset-2 transition-transform duration-1000 ${isNavOpen ? 'rotate-180' : 'animate-[spin_10s_linear_infinite]'}`}>
-                             <div className="absolute inset-0 flex items-center justify-center">
-                                 <div className="w-16 h-16 border border-gold/40 rotate-0 absolute"></div> {/* Box logic simplified for cleaner hexagram feel */}
-                                 <div className="w-16 h-16 border border-gold/40 rotate-60 absolute"></div>
-                                 <div className="w-16 h-16 border border-gold/40 -rotate-60 absolute"></div>
-                             </div>
-                         </div>
-
-                         {/* Center Core */}
-                         <div className="relative z-10 w-12 h-12 bg-midnight rounded-full border border-gold shadow-[0_0_15px_rgba(197,160,89,0.5)] flex items-center justify-center">
-                              {isNavOpen ? (
-                                  <span className="text-gold text-xs">✕</span>
-                              ) : (
-                                  <span className="text-xl animate-pulse">{REALM_CONFIG[activeRealm].icon}</span>
-                              )}
-                         </div>
-
-                     </button>
-                 </div>
-            </div>
+            {/* --- NEW: THE ELDRITCH MANDALA --- */}
+            <EldritchMandala 
+                isOpen={isNavOpen}
+                activeRealm={activeRealm} 
+                onRealmChange={handleRealmChange}
+                onClose={() => setIsNavOpen(!isNavOpen)}
+            />
 
             {/* --- THE FLYING BOOK LAYER --- */}
             {selectedBook && (
@@ -401,16 +591,10 @@ const Bookshelf: React.FC<BookshelfProps> = ({ onBookSelected }) => {
                             ${isBinding ? 'animate-[shake_0.5s_ease-in-out_infinite] scale-105 brightness-125' : ''}
                         `}
                         style={getFlyingStyle()}
-                        // Clicking the container toggles open/closed (unless entering)
                         onClick={handleToggleBook} 
                     >
-                        
-                        {/* 
-                           ========================================================================
-                           COMPONENT A: THE FLIPPER (Front Cover + Inner Left Page)
-                           ========================================================================
-                        */}
-                        <div 
+                        {/* Book Flipper Logic (Unchanged) */}
+                         <div 
                             className={`
                                 absolute inset-0 preserve-3d origin-left transition-transform duration-700 ease-[cubic-bezier(0.25,1,0.5,1)]
                             `}
@@ -419,25 +603,18 @@ const Bookshelf: React.FC<BookshelfProps> = ({ onBookSelected }) => {
                                 zIndex: 20 
                             }}
                         >
-                            {/* --- FRONT COVER (Outer Face) --- */}
+                            {/* Front Cover */}
                             <div 
                                 className="absolute inset-0 rounded-r-md flex flex-col items-center p-6 text-center justify-between backface-hidden overflow-hidden"
                                 style={{
                                     backgroundColor: '#1a1412',
-                                    transform: 'translateZ(10px)', // Front Face thickness
+                                    transform: 'translateZ(10px)',
                                     boxShadow: 'inset 5px 0 15px rgba(0,0,0,0.8), 10px 10px 30px rgba(0,0,0,0.8)'
                                 }}
                             >
                                 <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/black-scales.png')] opacity-60 mix-blend-multiply rounded-r-md"></div>
                                 <div className="absolute inset-3 border border-gold/40 rounded-sm pointer-events-none"></div>
-                                {/* Corner Decorations */}
-                                <div className="absolute top-3 left-3 w-4 h-4 border-t border-l border-gold/60"></div>
-                                <div className="absolute top-3 right-3 w-4 h-4 border-t border-r border-gold/60"></div>
-                                <div className="absolute bottom-3 left-3 w-4 h-4 border-b border-l border-gold/60"></div>
-                                <div className="absolute bottom-3 right-3 w-4 h-4 border-b border-r border-gold/60"></div>
-
-                                {/* COVER CONTENT */}
-                                <div className={`relative z-10 flex flex-col h-full items-center justify-center py-4 transition-opacity duration-300`}>
+                                <div className="relative z-10 flex flex-col h-full items-center justify-center py-4 transition-opacity duration-300">
                                     <div className="text-gold/60 text-[10px] tracking-[0.3em] font-mystic mb-4">GRIMOIRE</div>
                                     <div className="w-32 h-32 rounded-full border border-gold/20 flex items-center justify-center relative mb-4">
                                         <div className="absolute inset-0 bg-gold/5 rounded-full blur-xl"></div>
@@ -452,37 +629,29 @@ const Bookshelf: React.FC<BookshelfProps> = ({ onBookSelected }) => {
                                 </div>
                             </div>
 
-                            {/* --- INNER LEFT PAGE (Inner Face) --- */}
+                            {/* Inner Left Page */}
                             <div 
                                 className="absolute inset-0 bg-[#e3dac9] rounded-l-md backface-hidden flex flex-col p-6 overflow-hidden preserve-3d"
                                 style={{
-                                    transform: 'translateZ(10px) rotateY(180deg)', // Back of the front cover
+                                    transform: 'translateZ(10px) rotateY(180deg)',
                                     boxShadow: 'inset -10px 0 30px rgba(0,0,0,0.1), 5px 0 15px rgba(0,0,0,0.1)' 
                                 }}
                             >
-                                {/* 3D PAGE THICKNESS (Right Edge of Left Page) - The "Gutter" */}
                                 <div 
                                     className="absolute right-0 top-1 bottom-1 w-[6px] origin-right"
                                     style={{ 
                                         transform: 'rotateY(-90deg)',
-                                        background: 'linear-gradient(to right, #ccc 0%, #e3dac9 40%, #c5bba8 100%)', // Rounded thickness effect
+                                        background: 'linear-gradient(to right, #ccc 0%, #e3dac9 40%, #c5bba8 100%)',
                                     }}
                                 ></div>
-
-                                {/* Paper Texture */}
                                 <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/aged-paper.png')] opacity-30 mix-blend-multiply"></div>
-                                
-                                {/* Content - Layout optimized for Left Side */}
                                 <div className="relative z-10 h-full flex flex-col items-center justify-center text-[#3e342a] border border-[#3e342a]/10 p-4">
                                     <div className="text-4xl text-[#8A2323] mb-4 opacity-80">❦</div>
-                                    
                                     <h3 className="font-mystic text-lg text-[#8A2323] mb-2 tracking-widest text-center">Prologue</h3>
                                     <div className="w-12 h-[1px] bg-[#8A2323] mb-6"></div>
-                                    
                                     <p className="font-serif text-xs leading-loose italic opacity-80 text-center px-2">
                                         "{selectedBook.description}"
                                     </p>
-                                    
                                     <div className="mt-8 text-[9px] uppercase tracking-[0.2em] opacity-40">
                                         {REALM_CONFIG[selectedBook.realm].label}
                                     </div>
@@ -490,14 +659,7 @@ const Bookshelf: React.FC<BookshelfProps> = ({ onBookSelected }) => {
                             </div>
                         </div>
 
-
-                        {/* 
-                           ========================================================================
-                           COMPONENT B: THE BASE (Spine + Back Cover + Right Page)
-                           ========================================================================
-                        */}
-
-                        {/* --- SPINE (Left Edge) --- */}
+                        {/* Spine */}
                         <div 
                             className="absolute top-0 bottom-0 left-0 bg-[#16100e] flex flex-col items-center justify-center border-l border-white/5 overflow-hidden"
                             style={{ 
@@ -517,16 +679,15 @@ const Bookshelf: React.FC<BookshelfProps> = ({ onBookSelected }) => {
                             </div>
                         </div>
 
-                        {/* --- INNER RIGHT PAGE (Sits on top of Back Cover) --- */}
+                        {/* Inner Right Page */}
                         <div 
                             className="absolute top-1 bottom-1 left-0 right-1 bg-[#e3dac9] rounded-r-sm shadow-inner preserve-3d"
                             style={{
-                                transform: 'translateZ(8px)', // Slightly Recessed from the Z10 plane
+                                transform: 'translateZ(8px)',
                                 zIndex: 5,
                                 background: '#e3dac9'
                             }}
                         >
-                            {/* 3D PAGE THICKNESS (Left Edge of Right Page) - The "Gutter" */}
                             <div 
                                 className="absolute left-0 top-1 bottom-1 w-[6px] origin-left"
                                 style={{ 
@@ -534,24 +695,18 @@ const Bookshelf: React.FC<BookshelfProps> = ({ onBookSelected }) => {
                                     background: 'linear-gradient(to left, #ccc 0%, #e3dac9 40%, #c5bba8 100%)',
                                 }}
                             ></div>
-
                             <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/aged-paper.png')] opacity-30 mix-blend-multiply"></div>
-                             {/* Shadow near spine */}
                             <div className="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-black/20 to-transparent pointer-events-none"></div>
 
-                            {/* Content - Layout optimized for Right Side */}
                             <div className="relative z-10 h-full flex flex-col items-center p-6 text-[#3e342a]">
                                 <div className="w-full flex justify-between items-center border-b border-[#3e342a]/20 pb-2 mb-6">
                                     <span className="text-[9px] uppercase tracking-widest text-[#8A2323] opacity-60">Chapter I</span>
                                     <span className="text-[9px] font-mono opacity-40">Pg. 1</span>
                                 </div>
-                                
                                 <h2 className="font-serif text-2xl font-bold mb-4 text-center mt-4">The Beginning</h2>
                                 <p className="font-serif text-xs leading-relaxed opacity-70 mb-8 text-justify indent-4">
                                     Within these pages lie {selectedBook.word_count} ancient runes awaiting your command. Only those with a clear mind and steady will can decipher the logic hidden within.
                                 </p>
-
-                                {/* ENTER BUTTON */}
                                 <button 
                                     onClick={handleEnterGrimoire}
                                     className="mt-auto mb-8 group relative px-8 py-3 bg-[#2C241B] text-[#E6DCC3] font-mystic text-sm uppercase tracking-widest shadow-lg hover:scale-105 transition-all"
@@ -565,7 +720,7 @@ const Bookshelf: React.FC<BookshelfProps> = ({ onBookSelected }) => {
                             </div>
                         </div>
 
-                        {/* --- PAGES BLOCK (Side View / Thickness) --- */}
+                        {/* Pages Thickness */}
                         <div 
                             className="absolute top-1 bottom-1 right-0 bg-[#e3dac9]"
                             style={{
@@ -577,7 +732,7 @@ const Bookshelf: React.FC<BookshelfProps> = ({ onBookSelected }) => {
                             }}
                         ></div>
 
-                        {/* --- BACK COVER --- */}
+                        {/* Back Cover */}
                         <div 
                             className="absolute inset-0 bg-[#1a1412] rounded-l-md"
                             style={{ 
@@ -586,7 +741,7 @@ const Bookshelf: React.FC<BookshelfProps> = ({ onBookSelected }) => {
                             }}
                         ></div>
 
-                        {/* Close Button (X) - Floating outside */}
+                        {/* Close Button */}
                         <div className={`absolute -top-12 -right-12 pointer-events-auto transition-opacity duration-300 ${animState === 'open' ? 'opacity-100 delay-500' : 'opacity-0'}`}>
                             <button 
                                 onClick={handleClose}
