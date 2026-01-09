@@ -73,6 +73,10 @@ const Bookshelf: React.FC<BookshelfProps> = ({ onBookSelected }) => {
     const [selectedBook, setSelectedBook] = useState<Grimoire | null>(null);
     const [sourceRect, setSourceRect] = useState<DOMRect | null>(null);
     const [animState, setAnimState] = useState<'opening' | 'open' | 'closing'>('opening');
+    
+    // Interaction States
+    const [isBookOpen, setIsBookOpen] = useState(false); // Is the cover flipped?
+    const [isPressing, setIsPressing] = useState(false); // The "Squash" anticipation state
     const [isBinding, setIsBinding] = useState(false);
 
     // Group books for the shelves (chunks of 4)
@@ -82,17 +86,14 @@ const Bookshelf: React.FC<BookshelfProps> = ({ onBookSelected }) => {
     }
 
     const handleSpineClick = (e: React.MouseEvent, book: Grimoire) => {
-        // 1. Capture the EXACT position of the spine before it moves
         const rect = e.currentTarget.getBoundingClientRect();
         setSourceRect(rect);
-        
-        // 2. Set state to mount the modal
         setSelectedBook(book);
         setAnimState('opening');
+        setIsBookOpen(false); 
+        setIsPressing(false);
 
-        // 3. Trigger the animation to the center next frame
         requestAnimationFrame(() => {
-            // Force reflow
             void document.body.offsetHeight;
             setAnimState('open');
         });
@@ -100,19 +101,51 @@ const Bookshelf: React.FC<BookshelfProps> = ({ onBookSelected }) => {
 
     const handleClose = (e?: React.MouseEvent) => {
         e?.stopPropagation();
+        
+        // If book is open (reading mode), close the cover first
+        if (isBookOpen) {
+            setIsBookOpen(false);
+            // Wait for cover close animation (600ms) then fly back
+            setTimeout(() => {
+                setAnimState('closing');
+                setTimeout(() => {
+                    setSelectedBook(null);
+                    setSourceRect(null);
+                }, 800);
+            }, 600);
+            return;
+        }
+
         if (animState !== 'open') return;
 
-        // 1. Trigger closing animation (Move back to sourceRect)
         setAnimState('closing');
-
-        // 2. Wait for transition to finish, then unmount
         setTimeout(() => {
             setSelectedBook(null);
             setSourceRect(null);
-        }, 800); // Matches CSS transition duration
+        }, 800);
     };
 
-    const handleBind = (e: React.MouseEvent) => {
+    const handleToggleBook = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (animState !== 'open') return;
+
+        if (!isBookOpen) {
+            // OPENING SEQUENCE:
+            // 1. Squash (Anticipation)
+            setIsPressing(true);
+            
+            // 2. Release & Open
+            setTimeout(() => {
+                setIsPressing(false);
+                setIsBookOpen(true);
+            }, 200); // 200ms press duration
+        } else {
+            // Closing is simpler
+            setIsBookOpen(false);
+        }
+    };
+
+    const handleEnterGrimoire = (e: React.MouseEvent) => {
         e.stopPropagation();
         if (!selectedBook) return;
         setIsBinding(true);
@@ -126,41 +159,52 @@ const Bookshelf: React.FC<BookshelfProps> = ({ onBookSelected }) => {
         if (!sourceRect) return {};
 
         const isOpeningOrClosing = animState === 'opening' || animState === 'closing';
-        const targetWidth = 256; // w-64
+        const targetWidth = 256; // w-64 (Cover width)
         const targetHeight = 384; // h-96
 
-        // Center position calculation
         const centerLeft = (window.innerWidth - targetWidth) / 2;
         const centerTop = (window.innerHeight - targetHeight) / 2;
 
         if (isOpeningOrClosing) {
             // State: AT THE SHELF
-            // CRITICAL MATH: 
-            // The container rotates 90deg Y.
-            // The spine inside translates Z+20px (Front Plane).
-            // In the rotated parent frame, Z+ points Right (Screen X+).
-            // So the spine appears shifted 20px to the Right.
-            // We subtract 20px from 'left' to align the visual spine with the sourceRect spine.
             const thicknessOffset = 20; 
-            
             return {
                 top: `${sourceRect.top}px`,
                 left: `${sourceRect.left - thicknessOffset}px`,
                 width: `${targetWidth}px`, 
-                height: `${sourceRect.height}px`, // Interpolate height from spine height
-                transform: 'translate3d(0,0,0) rotateY(90deg)', // Face the spine to viewer
-                transformOrigin: '0% 50%', // Pivot on left edge
+                height: `${sourceRect.height}px`,
+                transform: 'translate3d(0,0,0) rotateY(90deg)', 
+                transformOrigin: '0% 50%',
                 zIndex: 60
             };
         } else {
             // State: CENTERED
+            
+            // 1. Expansion: Shift right to center the spine
+            const offsetForOpen = isBookOpen ? (targetWidth / 2) : 0;
+            
+            // 2. Rotation: 
+            // - If Pressing: Maintain angle but scale down (Squash)
+            // - If Open: Dead flat (0deg)
+            // - If Closed (Floating): Angled (-15deg)
+            
+            let rotation = 'rotateY(-15deg)';
+            let scale = 'scale(1)';
+
+            if (isPressing) {
+                 scale = 'scale(0.95)'; // The Squash
+            } else if (isBookOpen) {
+                 rotation = 'rotateY(0deg)'; // The Straighten
+            }
+
             return {
                 top: `${centerTop}px`,
                 left: `${centerLeft}px`,
                 width: `${targetWidth}px`,
                 height: `${targetHeight}px`,
-                transform: 'translate3d(0,0,0) rotateY(0deg)', // Face front
-                transformOrigin: '0% 50%',
+                // We use translate3d to animate the position
+                transform: `translate3d(${offsetForOpen}px,0,0) ${rotation} ${scale}`,
+                transformOrigin: '0% 50%', // Important: Pivot from the Spine (Left edge)
                 zIndex: 60
             };
         }
@@ -190,7 +234,6 @@ const Bookshelf: React.FC<BookshelfProps> = ({ onBookSelected }) => {
                                         key={book.id} 
                                         book={book} 
                                         onClick={handleSpineClick} 
-                                        // Hide the original spine if this book is currently selected (it's "flying")
                                         isHidden={selectedBook?.id === book.id} 
                                     />
                                 ))}
@@ -208,97 +251,138 @@ const Bookshelf: React.FC<BookshelfProps> = ({ onBookSelected }) => {
 
             {/* --- THE FLYING BOOK LAYER --- */}
             {selectedBook && (
-                <div className="fixed inset-0 z-50 pointer-events-none perspective-1000">
+                <div className="fixed inset-0 z-50 pointer-events-none perspective-2000">
                     
-                    {/* Backdrop (Fades in/out) */}
+                    {/* Backdrop */}
                     <div 
-                        className={`absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-800 ease-in-out pointer-events-auto ${animState === 'open' ? 'opacity-100' : 'opacity-0'}`}
+                        className={`absolute inset-0 bg-black/70 backdrop-blur-md transition-opacity duration-800 ease-in-out pointer-events-auto ${animState === 'open' ? 'opacity-100' : 'opacity-0'}`}
                         onClick={handleClose}
                     ></div>
 
-                    {/* THE MORPHING BOOK OBJECT */}
+                    {/* THE BOOK RIG */}
                     <div 
                         className={`
-                            absolute transition-all duration-700 ease-[cubic-bezier(0.25,1,0.5,1)] preserve-3d pointer-events-auto
+                            absolute transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] preserve-3d pointer-events-auto
                             ${isBinding ? 'animate-[shake_0.5s_ease-in-out_infinite] scale-105 brightness-125' : ''}
                         `}
                         style={getFlyingStyle()}
-                        // Stop propagation so clicking the book doesn't close it
-                        onClick={(e) => e.stopPropagation()} 
+                        // Clicking the container toggles open/closed (unless entering)
+                        onClick={handleToggleBook} 
                     >
                         
-                        {/* =======================
-                            VISUAL: FRONT COVER
-                           ======================= */}
+                        {/* 
+                           ========================================================================
+                           COMPONENT A: THE FLIPPER (Front Cover + Inner Left Page)
+                           This group rotates -180deg when opening.
+                           Anchor point: Left Edge
+                           
+                           ANIMATION NOTE: We add 'delay-100' so the book straightens FIRST,
+                           then the cover flips open.
+                           ========================================================================
+                        */}
                         <div 
-                            className="absolute inset-0 rounded-r-md flex flex-col items-center p-6 text-center justify-between backface-hidden overflow-hidden"
-                            style={{
-                                backgroundColor: '#1a1412',
-                                transform: 'translateZ(20px)', // Thicker Z (Front Plane)
-                                boxShadow: 'inset 5px 0 15px rgba(0,0,0,0.8), 10px 10px 30px rgba(0,0,0,0.8)'
+                            className={`
+                                absolute inset-0 preserve-3d origin-left transition-transform duration-700 ease-[cubic-bezier(0.4,0,0.2,1)]
+                                ${isBookOpen ? 'delay-100' : ''}
+                            `}
+                            style={{ 
+                                transform: isBookOpen ? 'rotateY(-180deg)' : 'rotateY(0deg)',
+                                zIndex: 20 
                             }}
                         >
-                            {/* Texture & Border */}
-                            <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/black-scales.png')] opacity-60 mix-blend-multiply rounded-r-md"></div>
-                            <div className="absolute inset-3 border border-gold/40 rounded-sm pointer-events-none"></div>
-                            
-                            {/* Corner Decorations */}
-                            <div className="absolute top-3 left-3 w-4 h-4 border-t border-l border-gold/60"></div>
-                            <div className="absolute top-3 right-3 w-4 h-4 border-t border-r border-gold/60"></div>
-                            <div className="absolute bottom-3 left-3 w-4 h-4 border-b border-l border-gold/60"></div>
-                            <div className="absolute bottom-3 right-3 w-4 h-4 border-b border-r border-gold/60"></div>
-
-                            {/* Content (Fades out when closing to spine) */}
+                            {/* --- FRONT COVER (Outer Face) --- */}
                             <div 
-                                className={`relative z-10 flex flex-col h-full items-center justify-between py-4 transition-opacity duration-300 ${animState === 'open' ? 'opacity-100 delay-300' : 'opacity-0'}`}
+                                className="absolute inset-0 rounded-r-md flex flex-col items-center p-6 text-center justify-between backface-hidden overflow-hidden"
+                                style={{
+                                    backgroundColor: '#1a1412',
+                                    transform: 'translateZ(20px)', // Front Face
+                                    boxShadow: 'inset 5px 0 15px rgba(0,0,0,0.8), 10px 10px 30px rgba(0,0,0,0.8)'
+                                }}
                             >
-                                <div className="text-gold/60 text-[10px] tracking-[0.3em] font-mystic">GRIMOIRE</div>
-                                
-                                {/* Center Art */}
-                                <div className="w-24 h-24 rounded-full border border-gold/20 flex items-center justify-center relative">
-                                    <div className="absolute inset-0 animate-[spin_20s_linear_infinite] opacity-30 border border-dashed border-gold/30 rounded-full"></div>
-                                    <div className="absolute inset-0 bg-gold/5 rounded-full blur-xl"></div>
-                                    <div className="text-5xl filter drop-shadow-[0_0_10px_rgba(197,160,89,0.5)]">{selectedBook.icon}</div>
-                                </div>
+                                <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/black-scales.png')] opacity-60 mix-blend-multiply rounded-r-md"></div>
+                                <div className="absolute inset-3 border border-gold/40 rounded-sm pointer-events-none"></div>
+                                {/* Corner Decorations */}
+                                <div className="absolute top-3 left-3 w-4 h-4 border-t border-l border-gold/60"></div>
+                                <div className="absolute top-3 right-3 w-4 h-4 border-t border-r border-gold/60"></div>
+                                <div className="absolute bottom-3 left-3 w-4 h-4 border-b border-l border-gold/60"></div>
+                                <div className="absolute bottom-3 right-3 w-4 h-4 border-b border-r border-gold/60"></div>
 
-                                <div>
-                                    <h2 className="font-serif text-2xl text-parchment font-bold mb-2 text-shadow" style={{ color: selectedBook.theme_color }}>
+                                {/* COVER CONTENT */}
+                                <div className={`relative z-10 flex flex-col h-full items-center justify-center py-4 transition-opacity duration-300`}>
+                                    <div className="text-gold/60 text-[10px] tracking-[0.3em] font-mystic mb-4">GRIMOIRE</div>
+                                    <div className="w-32 h-32 rounded-full border border-gold/20 flex items-center justify-center relative mb-4">
+                                        <div className="absolute inset-0 bg-gold/5 rounded-full blur-xl"></div>
+                                        <div className="text-6xl filter drop-shadow-[0_0_10px_rgba(197,160,89,0.5)]">{selectedBook.icon}</div>
+                                    </div>
+                                    <h2 className="font-serif text-3xl text-parchment font-bold mb-2 text-shadow" style={{ color: selectedBook.theme_color }}>
                                         {selectedBook.title}
                                     </h2>
-                                    <div className="w-8 h-[1px] bg-gold/30 mx-auto mb-2"></div>
-                                    <p className="font-serif text-[10px] text-white/60 italic px-2 leading-relaxed">
+                                    <div className="text-[10px] text-gold/40 uppercase tracking-widest mt-8 animate-pulse">
+                                        Tap to Open
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* --- INNER LEFT PAGE (Inner Face) --- */}
+                            <div 
+                                className="absolute inset-0 bg-[#e3dac9] rounded-l-md backface-hidden flex flex-col p-6 overflow-hidden preserve-3d"
+                                style={{
+                                    transform: 'translateZ(20px) rotateY(180deg)', // Back of the front cover
+                                    boxShadow: 'inset -10px 0 30px rgba(0,0,0,0.1), 5px 0 15px rgba(0,0,0,0.1)' 
+                                }}
+                            >
+                                {/* 3D PAGE THICKNESS (Right Edge of Left Page) - The "Gutter" */}
+                                <div 
+                                    className="absolute right-0 top-1 bottom-1 w-[4px] origin-right"
+                                    style={{ 
+                                        transform: 'rotateY(-90deg)',
+                                        background: 'linear-gradient(to right, #ccc 0%, #e3dac9 100%)',
+                                        backgroundSize: '1px 100%'
+                                    }}
+                                ></div>
+
+                                {/* Paper Texture */}
+                                <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/aged-paper.png')] opacity-30 mix-blend-multiply"></div>
+                                
+                                {/* Content - Layout optimized for Left Side */}
+                                <div className="relative z-10 h-full flex flex-col items-center justify-center text-[#3e342a] border border-[#3e342a]/10 p-4">
+                                    <div className="text-4xl text-[#8A2323] mb-4 opacity-80">❦</div>
+                                    
+                                    <h3 className="font-mystic text-lg text-[#8A2323] mb-2 tracking-widest text-center">Prologue</h3>
+                                    <div className="w-12 h-[1px] bg-[#8A2323] mb-6"></div>
+                                    
+                                    <p className="font-serif text-xs leading-loose italic opacity-80 text-center px-2">
                                         "{selectedBook.description}"
                                     </p>
+                                    
+                                    <div className="mt-8 text-[9px] uppercase tracking-[0.2em] opacity-40">
+                                        {selectedBook.realm} Realm
+                                    </div>
                                 </div>
-
-                                <button 
-                                    onClick={handleBind}
-                                    className="w-full py-3 mt-4 border border-gold/30 bg-gold/5 text-gold hover:bg-gold hover:text-midnight transition-all font-mystic text-xs uppercase tracking-widest shadow-[0_0_15px_rgba(197,160,89,0.1)] group"
-                                >
-                                    {isBinding ? 'Unlocking...' : 'Open Grimoire'}
-                                </button>
                             </div>
                         </div>
 
-                        {/* =======================
-                            VISUAL: SPINE (Left Face)
-                           ======================= */}
+
+                        {/* 
+                           ========================================================================
+                           COMPONENT B: THE BASE (Spine + Back Cover + Right Page)
+                           This group stays static (relative to container).
+                           ========================================================================
+                        */}
+
+                        {/* --- SPINE (Left Edge) --- */}
                         <div 
                             className="absolute top-0 bottom-0 left-0 bg-[#16100e] flex flex-col items-center justify-center border-l border-white/5 overflow-hidden"
                             style={{ 
                                 width: '40px',
-                                // GEOMETRY FIX: Start at Front Plane (Z20) and hinge back 90deg to form Left Face
                                 transform: 'translateZ(20px) rotateY(-90deg)', 
-                                transformOrigin: 'left center' 
+                                transformOrigin: 'left center',
+                                zIndex: 10
                             }} 
                         >
-                            {/* We keep the spine content visible even during flight so it looks consistent when it lands */}
                             <div className="absolute inset-0 opacity-40 mix-blend-overlay" style={{ backgroundColor: selectedBook.theme_color }}></div>
-                            
-                            {/* Ribs */}
                             <div className="absolute top-10 left-0 right-0 h-[2px] bg-white/20"></div>
                             <div className="absolute bottom-10 left-0 right-0 h-[2px] bg-white/20"></div>
-
                             <div className="flex-1 flex items-center justify-center py-2 writing-vertical-rl">
                                 <span className="font-mystic text-sm tracking-[0.2em] uppercase truncate rotate-180 transform text-gold">
                                     {selectedBook.title}
@@ -306,14 +390,60 @@ const Bookshelf: React.FC<BookshelfProps> = ({ onBookSelected }) => {
                             </div>
                         </div>
 
-                        {/* =======================
-                            VISUAL: PAGES (Right Face)
-                           ======================= */}
+                        {/* --- INNER RIGHT PAGE (Sits on top of Back Cover) --- */}
+                        <div 
+                            className="absolute top-1 bottom-1 left-0 right-1 bg-[#e3dac9] rounded-r-sm shadow-inner preserve-3d"
+                            style={{
+                                transform: 'translateZ(18px)', // Slightly Recessed from the Z20 plane
+                                zIndex: 5,
+                                background: '#e3dac9'
+                            }}
+                        >
+                            {/* 3D PAGE THICKNESS (Left Edge of Right Page) - The "Gutter" */}
+                            <div 
+                                className="absolute left-0 top-1 bottom-1 w-[4px] origin-left"
+                                style={{ 
+                                    transform: 'rotateY(90deg)',
+                                    background: 'linear-gradient(to left, #ccc 0%, #e3dac9 100%)',
+                                    backgroundSize: '1px 100%'
+                                }}
+                            ></div>
+
+                            <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/aged-paper.png')] opacity-30 mix-blend-multiply"></div>
+                             {/* Shadow near spine */}
+                            <div className="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-black/20 to-transparent pointer-events-none"></div>
+
+                            {/* Content - Layout optimized for Right Side */}
+                            <div className="relative z-10 h-full flex flex-col items-center p-6 text-[#3e342a]">
+                                <div className="w-full flex justify-between items-center border-b border-[#3e342a]/20 pb-2 mb-6">
+                                    <span className="text-[9px] uppercase tracking-widest text-[#8A2323] opacity-60">Chapter I</span>
+                                    <span className="text-[9px] font-mono opacity-40">Pg. 1</span>
+                                </div>
+                                
+                                <h2 className="font-serif text-2xl font-bold mb-4 text-center mt-4">The Beginning</h2>
+                                <p className="font-serif text-xs leading-relaxed opacity-70 mb-8 text-justify indent-4">
+                                    Within these pages lie {selectedBook.word_count} ancient runes awaiting your command. Only those with a clear mind and steady will can decipher the logic hidden within.
+                                </p>
+
+                                {/* ENTER BUTTON */}
+                                <button 
+                                    onClick={handleEnterGrimoire}
+                                    className="mt-auto mb-8 group relative px-8 py-3 bg-[#2C241B] text-[#E6DCC3] font-mystic text-sm uppercase tracking-widest shadow-lg hover:scale-105 transition-all"
+                                >
+                                    <span className="relative z-10 flex items-center gap-2">
+                                         {isBinding ? 'Unsealing...' : 'Enter World'} 
+                                         {!isBinding && <span className="text-xs group-hover:translate-x-1 transition-transform">➔</span>}
+                                    </span>
+                                    <div className="absolute inset-1 border border-[#E6DCC3]/30"></div>
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* --- PAGES (Side View / Thickness) --- */}
                         <div 
                             className="absolute top-1 bottom-1 right-0 bg-[#e3dac9]"
                             style={{
-                                width: '36px', // Slightly narrower to tuck inside covers
-                                // GEOMETRY FIX: Start at Front Plane (Z20) and hinge back 90deg to form Right Face
+                                width: '36px', 
                                 transform: 'translateZ(20px) rotateY(90deg)',
                                 transformOrigin: 'right center',
                                 backgroundImage: "linear-gradient(to right, #dcd1b4 1px, transparent 1px)",
@@ -321,9 +451,7 @@ const Bookshelf: React.FC<BookshelfProps> = ({ onBookSelected }) => {
                             }}
                         ></div>
 
-                        {/* =======================
-                            VISUAL: BACK COVER
-                           ======================= */}
+                        {/* --- BACK COVER --- */}
                         <div 
                             className="absolute inset-0 bg-[#1a1412] rounded-l-md"
                             style={{ 
@@ -332,8 +460,8 @@ const Bookshelf: React.FC<BookshelfProps> = ({ onBookSelected }) => {
                             }}
                         ></div>
 
-                        {/* Close Button (X) - Only visible when open */}
-                        <div className={`absolute -top-10 -right-10 pointer-events-auto transition-opacity duration-300 ${animState === 'open' ? 'opacity-100 delay-500' : 'opacity-0'}`}>
+                        {/* Close Button (X) - Floating outside */}
+                        <div className={`absolute -top-12 -right-12 pointer-events-auto transition-opacity duration-300 ${animState === 'open' ? 'opacity-100 delay-500' : 'opacity-0'}`}>
                             <button 
                                 onClick={handleClose}
                                 className="w-10 h-10 rounded-full border border-white/10 text-white/40 flex items-center justify-center hover:bg-white/10 hover:text-white transition-colors bg-black/20 backdrop-blur-md"
